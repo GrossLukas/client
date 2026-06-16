@@ -49,6 +49,35 @@ using namespace std::chrono_literals;
 
 namespace OCC {
 
+// localized, human-readable label of the overall sync status for the tray
+// icon accessible name (tooltip), read out by screen readers (NVDA/Narrator/Orca)
+QString trayStatusToString(SyncResult::Status status)
+{
+    switch (status) {
+    case SyncResult::Status::Undefined:
+    case SyncResult::Status::Offline:
+        return QCoreApplication::translate("ownCloudGui", "Offline");
+    case SyncResult::Status::NotYetStarted:
+    case SyncResult::Status::SyncPrepare:
+    case SyncResult::Status::SyncRunning:
+        return QCoreApplication::translate("ownCloudGui", "Syncing");
+    case SyncResult::Status::SyncAbortRequested:
+        return QCoreApplication::translate("ownCloudGui", "Aborting sync");
+    case SyncResult::Status::Success:
+        return QCoreApplication::translate("ownCloudGui", "Up to date");
+    case SyncResult::Status::Problem:
+        return QCoreApplication::translate("ownCloudGui", "Up to date, some files were ignored");
+    case SyncResult::Status::Error:
+    case SyncResult::Status::SetupError:
+        return QCoreApplication::translate("ownCloudGui", "Error");
+    case SyncResult::Status::Paused:
+        return QCoreApplication::translate("ownCloudGui", "Sync paused");
+    case SyncResult::Status::Unavailable:
+        return QCoreApplication::translate("ownCloudGui", "Unavailable");
+    }
+    return QCoreApplication::translate("ownCloudGui", "Offline");
+}
+
 // simple helper to compute the overall status for the tray icon
 SyncResult::Status trayOverallStatus()
 {
@@ -160,6 +189,9 @@ void ownCloudGui::slotComputeOverallSyncStatus()
     auto status = trayOverallStatus();
     const QIcon statusIcon = getTrayStatusIcon(status);
     _tray->setIcon(statusIcon);
+    // Set a localized, descriptive tooltip so the tray icon exposes an
+    // accessible name (status) to screen readers instead of icon-only graphics
+    _tray->setToolTip(Theme::instance()->appNameGUI() + QStringLiteral(" - ") + trayStatusToString(status));
 }
 
 SettingsDialog *ownCloudGui::settingsDialog() const
