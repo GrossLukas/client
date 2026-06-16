@@ -68,6 +68,7 @@ RequestAuthenticationWidget::RequestAuthenticationWidget(QWidget *parent)
     _copyButton->setFlat(true);
     _copyButton->setContentsMargins(0, 0, 0, 0);
     _copyButton->setFixedSize(_urlField->height(), _urlField->height());
+    _copyButton->setAccessibleName(tr("Copy sign in URL"));
     _copyButton->setAccessibleDescription(tr("Copy URL to sign in"));
     _copyButton->installEventFilter(this);
     connect(_copyButton, &QPushButton::clicked, this, &RequestAuthenticationWidget::onCopyUrl);
