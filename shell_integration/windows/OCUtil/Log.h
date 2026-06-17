@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2022 Hannah von Reth <hannah.vonreth@owncloud.com>. All rights reserved.
+ * Modified by BW-Tech GmbH for owncloud.online branding.
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the Free
@@ -22,7 +23,7 @@ template <typename T = std::wstring>
 void log(const std::wstring &msg, const T &error = {})
 {
     std::wstringstream tmp;
-    tmp << L"ownCloud ShellExtension: " << msg;
+    tmp << L"owncloud.online ShellExtension: " << msg;
     if (!error.empty()) {
         tmp << L" " << error.data();
     }

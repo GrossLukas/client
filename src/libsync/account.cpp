@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Daniel Molkentin <danimo@owncloud.com>
+ * Modified by BW-Tech GmbH for owncloud.online server compatibility.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -322,12 +323,6 @@ void Account::setCapabilities(const Capabilities &caps)
     if (!caps.isValid())
         return;
 
-    // this should not happen:
-    if (!caps.spacesSupport().enabled) {
-        qCWarning(lcAccount) << "trying to set capabilities instance that doesn't support spaces - aborting";
-        return;
-    }
-
     const bool versionChanged =
         caps.status().legacyVersion != _capabilities.status().legacyVersion || caps.status().productversion != _capabilities.status().productversion;
     _capabilities = caps;
@@ -336,22 +331,30 @@ void Account::setCapabilities(const Capabilities &caps)
     }
 }
 
-Account::ServerSupportLevel Account::serverSupportLevel() const
+Account::ServerSupportLevel Account::supportLevelForCapabilities(const Capabilities &caps)
 {
-    if (!hasCapabilities()) {
+    if (!caps.isValid()) {
         // not detected yet
         // should only happen when reloading an account from config?
         return ServerSupportLevel::Unknown;
     }
 
-    // todo: #34
-    // ocis and kiteworks allegedly
-    // this seems awfully loosey goosey but I've been told it should work
-    if (!capabilities().status().productversion.isEmpty()) {
+    if (!caps.status().productversion.isEmpty()) {
+        return ServerSupportLevel::Supported;
+    }
+
+    // owncloud.online is an ownCloud 10/11 fork running on PHP 8.4. It exposes the
+    // legacy ownCloud version fields and does not require the Infinite Scale spaces API.
+    if (!caps.status().legacyVersion.isNull() && caps.status().legacyVersion >= QVersionNumber(10, 0, 0)) {
         return ServerSupportLevel::Supported;
     }
 
     return ServerSupportLevel::Unsupported;
+}
+
+Account::ServerSupportLevel Account::serverSupportLevel() const
+{
+    return supportLevelForCapabilities(capabilities());
 }
 
 QString Account::defaultSyncRoot() const

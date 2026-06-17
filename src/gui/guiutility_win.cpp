@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Erik Verbruggen <erik@verbruggen.consulting>
+ * Modified by BW-Tech GmbH for owncloud.online branding.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@ void Utility::startShellIntegration()
 
 QString Utility::socketApiSocketPath()
 {
-    return QStringLiteral(R"(\\.\pipe\ownCloud-%1)").arg(qEnvironmentVariable("USERNAME"));
+    return QStringLiteral(R"(\\.\pipe\owncloud.online-%1)").arg(qEnvironmentVariable("USERNAME"));
 }
 
 } // namespace OCC

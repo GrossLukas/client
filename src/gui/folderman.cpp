@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Klaas Freitag <freitag@owncloud.com>
+ * Modified by BW-Tech GmbH for owncloud.online server compatibility.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -224,6 +225,8 @@ bool FolderMan::addFoldersFromConfigByAccount(QSettings &settings, AccountState 
     if (!account || !account->account() || !account->account()->spacesManager())
         return false;
 
+    const bool usesSpaces = account->account()->capabilities().spacesSupport().enabled;
+
     settings.beginGroup(QStringLiteral("%1/Folders").arg(account->account()->groupIndex()));
 
     const auto &childGroups = settings.childGroups();
@@ -249,22 +252,26 @@ bool FolderMan::addFoldersFromConfigByAccount(QSettings &settings, AccountState 
         // this is a bit odd for now as in the gui it shows the unavailable state until after login. I think
         // in most cases this will be ok as it's not a common workflow, we just have it on demo
         // if we don't set this here a sync will be attempted, then it just shows as failed.
-        folder->setAvailable(folder->space() != nullptr);
+        if (usesSpaces) {
+            folder->setAvailable(folder->space() != nullptr);
+        }
 
         settings.endGroup(); // folderAlias
     }
     settings.endGroup(); // accountId\Folders
 
     GraphApi::SpacesManager *spaceMan = account->account()->spacesManager();
-    _scheduler->connectSpacesManager(spaceMan);
-    connect(spaceMan, &GraphApi::SpacesManager::spacesAdded, this, &FolderMan::onSpacesAdded);
-    connect(spaceMan, &GraphApi::SpacesManager::spacesRemoved, this, &FolderMan::onSpacesRemoved);
+    if (usesSpaces) {
+        _scheduler->connectSpacesManager(spaceMan);
+        connect(spaceMan, &GraphApi::SpacesManager::spacesAdded, this, &FolderMan::onSpacesAdded);
+        connect(spaceMan, &GraphApi::SpacesManager::spacesRemoved, this, &FolderMan::onSpacesRemoved);
+    }
 
     QUuid accountId = account->account()->uuid();
     emit folderListChanged(accountId, _folders[accountId].values());
     // at this stage the spaces manager tends to be empty
-    int spaceCount = spaceMan->spacesCount();
-    int unsyncedCount = _unsyncedSpaces.contains(accountId) ? _unsyncedSpaces[accountId].count() : 0;
+    int spaceCount = usesSpaces ? spaceMan->spacesCount() : 0;
+    int unsyncedCount = usesSpaces && _unsyncedSpaces.contains(accountId) ? _unsyncedSpaces[accountId].count() : 0;
     emit unsyncedSpaceCountChanged(accountId, unsyncedCount, spaceCount);
 
     return true;
@@ -273,6 +280,34 @@ bool FolderMan::addFoldersFromConfigByAccount(QSettings &settings, AccountState 
 void FolderMan::setUpInitialSyncFolders(AccountState *accountState, bool useVfs)
 {
     if (accountState && accountState->account() && accountState->account()->spacesManager()) {
+        if (!accountState->account()->capabilities().spacesSupport().enabled) {
+            setSyncEnabled(false);
+
+            const QString localDir(accountState->account()->defaultSyncRoot());
+            if (!prepareFolder(localDir)) {
+                setSyncEnabled(true);
+                return;
+            }
+
+            Utility::setupFavLink(localDir);
+
+            FolderDefinition folderDef(accountState->account()->davUrl(), {}, Theme::instance()->appNameGUI());
+            folderDef.setLocalPath(localDir);
+            folderDef.setTargetPath({});
+
+            QSettings settings = ConfigFile::makeQSettings();
+            settings.beginGroup("Accounts");
+            Folder *folder = addFolderFromScratch(accountState, std::move(folderDef), useVfs);
+            if (folder) {
+                saveFolder(folder, settings);
+                _scheduler->enqueueFolder(folder, SyncScheduler::Priority::High);
+                emit folderListChanged(accountState->account()->uuid(), _folders[accountState->account()->uuid()].values());
+                emit unsyncedSpaceCountChanged(accountState->account()->uuid(), 0, 0);
+            }
+            setSyncEnabled(true);
+            return;
+        }
+
         GraphApi::SpacesManager *spaceMan = accountState->account()->spacesManager();
 
         // this replaces the old use of SpacesManager::checkReady which was overcomplicated.
@@ -344,6 +379,11 @@ void FolderMan::loadSpacesAndCreateFolders(AccountState *accountState, bool useV
 void FolderMan::setUpInitialSpaces(AccountState *accountState)
 {
     if (accountState && accountState->account() && accountState->account()->spacesManager()) {
+        if (!accountState->account()->capabilities().spacesSupport().enabled) {
+            emit unsyncedSpaceCountChanged(accountState->account()->uuid(), 0, 0);
+            return;
+        }
+
         GraphApi::SpacesManager *spaceMan = accountState->account()->spacesManager();
 
         // this replaces the old use of SpacesManager::checkReady which was overcomplicated.
@@ -361,6 +401,11 @@ void FolderMan::loadSpacesAlone(AccountState *accountState)
 {
     if (!accountState || !accountState->account())
         return;
+
+    if (!accountState->account()->capabilities().spacesSupport().enabled) {
+        emit unsyncedSpaceCountChanged(accountState->account()->uuid(), 0, 0);
+        return;
+    }
 
     GraphApi::SpacesManager *spacesMgr = accountState->account()->spacesManager();
     if (!spacesMgr)
@@ -835,7 +880,7 @@ void FolderMan::removeFolderFromGui(Folder *f)
 
     QUuid accountId = f->accountState()->account()->uuid();
     emit folderRemoved(accountId, f);
-    if (f->isAvailable())
+    if (f->isAvailable() && f->accountState()->account()->capabilities().spacesSupport().enabled)
     {
         _unsyncedSpaces[accountId].insert(f->spaceId(), f->space());
         emit unsyncedSpaceCountChanged(accountId, _unsyncedSpaces[accountId].count(), f->accountState()->account()->spacesManager()->spacesCount());
@@ -1199,7 +1244,7 @@ void FolderMan::addFolderFromGui(AccountState *accountState, const SyncConnectio
         saveFolder(f);
         emit folderAdded(accountId, f);
 
-        if (_unsyncedSpaces.contains(accountId) && _unsyncedSpaces[accountId].contains(f->spaceId()))
+        if (accountState->account()->capabilities().spacesSupport().enabled && _unsyncedSpaces.contains(accountId) && _unsyncedSpaces[accountId].contains(f->spaceId()))
         {
             _unsyncedSpaces[accountId].remove(f->spaceId());
             emit unsyncedSpaceCountChanged(accountId, _unsyncedSpaces[accountId].count(), accountState->account()->spacesManager()->spacesCount());

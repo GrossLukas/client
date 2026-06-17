@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Duncan Mac-Vicar P. <duncan@kde.org>
+ * Modified by BW-Tech GmbH for owncloud.online server compatibility.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -85,8 +86,10 @@ FolderWizardPrivate::FolderWizardPrivate(FolderWizard *q, Account *account)
     , _folderWizardSelectiveSyncPage(nullptr)
 {
     if (_account) {
-        _spacesPage = new SpacesPage(account->spacesManager(), q);
-        q->setPage(FolderWizard::Page_Space, _spacesPage);
+        if (_account->capabilities().spacesSupport().enabled) {
+            _spacesPage = new SpacesPage(account->spacesManager(), q);
+            q->setPage(FolderWizard::Page_Space, _spacesPage);
+        }
     }
 
     q->setPage(FolderWizard::Page_Source, _folderWizardSourcePage);
@@ -101,17 +104,33 @@ FolderWizardPrivate::FolderWizardPrivate(FolderWizard *q, Account *account)
 
 QString FolderWizardPrivate::initialLocalPath() const
 {
+    if (!_spacesPage || !_spacesPage->currentSpace()) {
+        return defaultSyncRoot();
+    }
+
     return FolderMan::instance()->findGoodPathForNewSyncFolder(
         defaultSyncRoot(), _spacesPage->currentSpace()->displayName(), FolderMan::NewFolderType::SpacesFolder, _account->uuid());
 }
 
 uint32_t FolderWizardPrivate::priority() const
 {
+    if (!_spacesPage || !_spacesPage->currentSpace()) {
+        return 0;
+    }
+
     return _spacesPage->currentSpace()->sortPriority();
 }
 
 QUrl FolderWizardPrivate::davUrl() const
 {
+    if (!_spacesPage || !_spacesPage->currentSpace()) {
+        auto url = _account->davUrl();
+        if (!url.path().endsWith(QLatin1Char('/'))) {
+            url.setPath(url.path() + QLatin1Char('/'));
+        }
+        return url;
+    }
+
     auto url = _spacesPage->currentSpace()->webDavUrl();
     if (!url.path().endsWith(QLatin1Char('/'))) {
         url.setPath(url.path() + QLatin1Char('/'));
@@ -121,11 +140,19 @@ QUrl FolderWizardPrivate::davUrl() const
 
 QString FolderWizardPrivate::spaceId() const
 {
+    if (!_spacesPage || !_spacesPage->currentSpace()) {
+        return {};
+    }
+
     return _spacesPage->currentSpace()->id();
 }
 
 QString FolderWizardPrivate::displayName() const
 {
+    if (!_spacesPage || !_spacesPage->currentSpace()) {
+        return Theme::instance()->appNameGUI();
+    }
+
     return _spacesPage->currentSpace()->displayName();
 }
 

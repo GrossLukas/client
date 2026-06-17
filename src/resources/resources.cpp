@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Hannah von Reth <hannah.vonreth@owncloud.com>
+ * Modified by BW-Tech GmbH for owncloud.online branding.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,7 +51,8 @@ QString vanillaThemePath()
 
 QString brandThemePath()
 {
-    return QStringLiteral(":/client/" APPLICATION_SHORTNAME "/theme");
+    const auto brandedPath = QStringLiteral(":/client/" APPLICATION_SHORTNAME "/theme");
+    return QFileInfo(brandedPath).isDir() ? brandedPath : vanillaThemePath();
 }
 
 QString darkTheme()

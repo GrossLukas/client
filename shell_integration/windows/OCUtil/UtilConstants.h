@@ -1,5 +1,6 @@
 /**
  *  Copyright (c) 2000-2013 Liferay, Inc. All rights reserved.
+ *  Modified by BW-Tech GmbH for owncloud.online branding.
  *  
  *  This library is free software; you can redistribute it and/or modify it under
  *  the terms of the GNU Lesser General Public License as published by the Free
@@ -25,6 +26,6 @@
 #define QUOTE							L"\""
 #define VALUE							L"value"
 
-#define REGISTRY_ROOT_KEY			 L"SOFTWARE\\ownCloud Inc\\ownCloud"
+#define REGISTRY_ROOT_KEY			 L"SOFTWARE\\BW-Tech GmbH\\owncloud.online"
 #define REGISTRY_ENABLE_OVERLAY		 L"EnableOverlay"
 #define REGISTRY_FILTER_FOLDER		 L"FilterFolder"

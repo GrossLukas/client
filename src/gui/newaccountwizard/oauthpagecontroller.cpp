@@ -1,5 +1,6 @@
 /*
  * Copyright (C) Lisa Reese <lisa.reese@kiteworks.com>
+ * Modified by BW-Tech GmbH for owncloud.online server compatibility.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,6 +15,7 @@
 #include "oauthpagecontroller.h"
 
 #include "accessmanager.h"
+#include "account.h"
 #include "accountmanager.h"
 #include "config/appconfig.h"
 #include "networkadapters/fetchcapabilitiesadapter.h"
@@ -80,6 +82,7 @@ void OAuthPageController::buildPage()
     _copyButton->setFlat(true);
     _copyButton->setContentsMargins(0, 0, 0, 0);
     _copyButton->setFixedSize(_urlField->height(), _urlField->height());
+    _copyButton->setAccessibleName(tr("Copy sign in URL"));
     _copyButton->setAccessibleDescription(tr("Copy URL to sign in"));
     _copyButton->installEventFilter(this);
     connect(_copyButton, &QPushButton::clicked, this, &OAuthPageController::copyUrlClicked);
@@ -277,8 +280,7 @@ void OAuthPageController::handleOauthResult(OAuth::Result result, const QString 
             return;
         }
 
-        // Finally, get the capabilities so we can block oc10 accounts. Checking for spaces support is not
-        // great and this should be refined, but for now it's effective.
+        // Finally, get the capabilities so unsupported legacy servers can still be blocked.
         FetchCapabilitiesAdapter fetchCapabilities(_accessManager, _results.token, userInfoUrl);
         FetchCapabilitiesResult capabilitiesResult = fetchCapabilities.getResult();
         if (!capabilitiesResult.success()) {
@@ -287,7 +289,7 @@ void OAuthPageController::handleOauthResult(OAuth::Result result, const QString 
             handleError(tr("Unable to retrieve capabilities from server."));
             break;
         }
-        if (!capabilitiesResult.capabilities.spacesSupport().enabled) {
+        if (Account::supportLevelForCapabilities(capabilitiesResult.capabilities) != Account::ServerSupportLevel::Supported) {
             handleError(tr("The server is not supported by this client."));
             break;
         } else

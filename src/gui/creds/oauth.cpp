@@ -400,7 +400,7 @@ void OAuth::fetchWellKnown()
         if (err.error == QJsonParseError::NoError) {
             _authEndpoint = QUrl::fromEncoded(data[QStringLiteral("authorization_endpoint")].toString().toUtf8());
             _tokenEndpoint = QUrl::fromEncoded(data[QStringLiteral("token_endpoint")].toString().toUtf8());
-            _redirectUrl = QStringLiteral("http://127.0.0.1");
+            _redirectUrl = Theme::instance()->oauthLocalhost();
 
             const auto authMethods = data.value(QStringLiteral("token_endpoint_auth_methods_supported")).toArray();
             if (authMethods.contains(QStringLiteral("client_secret_basic"))) {

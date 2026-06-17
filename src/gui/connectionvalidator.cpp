@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Klaas Freitag <freitag@owncloud.com>
+ * Modified by BW-Tech GmbH for owncloud.online branding.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -71,7 +72,7 @@ void ConnectionValidator::checkServer(ConnectionValidator::ValidationMode mode)
 {
     _mode = mode;
     if (!_account) {
-        _errors << tr("No ownCloud account configured");
+        _errors << tr("No owncloud.online account configured");
         reportResult(NotConfigured);
         return;
     }
@@ -186,7 +187,7 @@ void ConnectionValidator::statusFound(const QUrl &url, const QJsonObject &info)
     }
 
     // status.php was found.
-    qCInfo(lcConnectionValidator) << "** Application: ownCloud found: "
+    qCInfo(lcConnectionValidator) << "** Application: owncloud.online-compatible server found: "
                                   << url << " with version "
                                   << info.value(QLatin1String("versionstring")).toString();
 

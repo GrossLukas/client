@@ -1,6 +1,7 @@
 /*
  *
  * Copyright (C) by Duncan Mac-Vicar P. <duncan@kde.org>
+ * Modified by BW-Tech GmbH for owncloud.online branding.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -98,11 +99,11 @@ CommandLineOptions parseOptions(const QStringList &arguments)
                                  .arg(Theme::instance()->appName(), OCC::Version::displayString())
                           << Qt::endl;
 
-    if (Theme::instance()->appName() == QLatin1String("ownCloud")) {
+    if (Theme::instance()->appName() == QLatin1String("owncloud.online")) {
         descriptionTextStream
             << Qt::endl
             << Qt::endl
-            << QApplication::translate("CommandLine", "For more information, see %1", "link to homepage").arg(QStringLiteral("https://www.owncloud.com"));
+            << QApplication::translate("CommandLine", "For more information, see %1", "link to homepage").arg(QStringLiteral("https://owncloud.online"));
     }
 
     parser.setApplicationDescription(descriptionText);

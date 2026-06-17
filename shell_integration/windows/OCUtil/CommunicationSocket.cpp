@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2000-2013 Liferay, Inc. All rights reserved.
+ * Modified by BW-Tech GmbH for owncloud.online branding.
  *
  * This library is free software; you can redistribute it and/or modify it under
  * the terms of the GNU Lesser General Public License as published by the Free
@@ -46,7 +47,7 @@ std::wstring getUserName() {
 std::wstring CommunicationSocket::DefaultPipePath()
 {
     auto pipename = std::wstring(L"\\\\.\\pipe\\");
-    pipename += L"ownCloud-";
+    pipename += L"owncloud.online-";
     pipename += getUserName();
     return pipename;
 }
