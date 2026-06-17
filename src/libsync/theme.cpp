@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Klaas Freitag <freitag@owncloud.com>
+ * Modified by BW-Tech GmbH for owncloud.online branding.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -194,7 +195,7 @@ QString Theme::defaultServerFolder() const
 
 QString Theme::helpUrl() const
 {
-    return QStringLiteral("https://doc.owncloud.com/desktop/latest/");
+    return QStringLiteral("https://owncloud.online/");
 }
 
 QString Theme::conflictHelpUrl() const
@@ -250,22 +251,8 @@ bool Theme::wizardSkipAdvancedPage() const
 
 QString Theme::gitSHA1(VersionFormat format) const
 {
-    const QString gitShahSort = Version::gitSha().left(6);
-    if (!aboutShowCopyright()) {
-        return gitShahSort;
-    }
-    const auto gitUrl = QStringLiteral("https://github.com/owncloud/client/commit/%1").arg(Version::gitSha());
-    switch (format) {
-    case Theme::VersionFormat::OneLiner:
-        Q_FALLTHROUGH();
-    case Theme::VersionFormat::Plain:
-        return gitShahSort;
-    case Theme::VersionFormat::Url:
-        return gitUrl;
-    case Theme::VersionFormat::RichText:
-        return QStringLiteral("<a href=\"%1\">%3</a>").arg(gitUrl, gitShahSort);
-    }
-    return QString();
+    Q_UNUSED(format)
+    return Version::gitSha().left(6);
 }
 
 QString Theme::aboutVersions(Theme::VersionFormat format) const
@@ -316,21 +303,16 @@ QString Theme::aboutVersions(Theme::VersionFormat format) const
 
 QString Theme::about() const
 {
-    // Ideally, the vendor should be "ownCloud GmbH", but it cannot be changed without
-    // changing the location of the settings and other registry keys.
-    const QString vendor = Resources::isVanillaTheme() ? QStringLiteral("ownCloud GmbH") : QStringLiteral(APPLICATION_VENDOR);
+    const QString vendor = QStringLiteral(APPLICATION_VENDOR);
     return tr("<p>Version %1. For more information visit <a href=\"%2\">https://%3</a></p>"
-              "<p>For known issues and help, please visit: <a href=\"https://central.owncloud.com/c/desktop-client\">https://central.owncloud.com</a></p>"
               "<p><small>By Klaas Freitag, Daniel Molkentin, Olivier Goffart, Markus Götz, "
               " Jan-Christoph Borchardt, Thomas Müller,<br>"
               "Dominik Schmidt, Michael Stingl, Hannah von Reth, Fabian Müller and others.</small></p>"
-              "<p>Copyright ownCloud GmbH (A Kiteworks Company)</p>"
-              "<p>Distributed by %4 and licensed under the GNU General Public License (GPL) Version 2.0.<br/>"
-              "%5 and the %5 logo are registered trademarks of %4 in the "
-              "United States, other countries, or both.</p>"
-              "<p><small>%6</small></p>")
+              "<p>owncloud.online Desktop Client is distributed by %4 and licensed under the GNU General Public License (GPL) Version 2.0.</p>"
+              "<p>Based on the ownCloud Desktop Client.</p>"
+              "<p><small>%5</small></p>")
         .arg(Utility::escape(Version::displayString()), Utility::escape(QStringLiteral("https://" APPLICATION_DOMAIN)),
-            Utility::escape(QStringLiteral(APPLICATION_DOMAIN)), Utility::escape(vendor), Utility::escape(appNameGUI()),
+            Utility::escape(QStringLiteral(APPLICATION_DOMAIN)), Utility::escape(vendor),
             aboutVersions(Theme::VersionFormat::RichText));
 }
 

@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Modified by BW-Tech GmbH for owncloud.online branding. -->
 <ui version="4.0">
  <class>OCC::AboutDialog</class>
  <widget class="QDialog" name="OCC::AboutDialog">
@@ -59,7 +60,7 @@
               <string notr="true"/>
              </property>
              <property name="pixmap">
-              <pixmap>:/client/ownCloud/theme/colored/owncloud-icon.svg</pixmap>
+              <pixmap>:/client/ownCloud/theme/universal/owncloud-icon.svg</pixmap>
              </property>
             </widget>
            </item>

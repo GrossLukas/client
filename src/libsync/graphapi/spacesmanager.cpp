@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Hannah von Reth <hannah.vonreth@owncloud.com>
+ * Modified by BW-Tech GmbH for owncloud.online server compatibility.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,6 +52,15 @@ void SpacesManager::refresh()
         return;
     }
     if (!_account->credentials()->ready()) {
+        return;
+    }
+
+    if (_account->hasCapabilities() && !_account->capabilities().spacesSupport().enabled) {
+        if (!_ready) {
+            _ready = true;
+            Q_EMIT ready();
+        }
+        Q_EMIT updated(_account);
         return;
     }
 

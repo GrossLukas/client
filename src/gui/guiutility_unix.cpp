@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Erik Verbruggen <erik@verbruggen.consulting>
+ * Modified by BW-Tech GmbH for owncloud.online branding.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,7 +26,7 @@ void Utility::startShellIntegration()
 
 QString Utility::socketApiSocketPath()
 {
-    return QStringLiteral("%1/ownCloud/socket").arg(QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation));
+    return QStringLiteral("%1/owncloud.online/socket").arg(QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation));
 }
 
 } // namespace OCC

@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Olivier Goffart <ogoffart@woboq.com>
+ * Modified by BW-Tech GmbH for owncloud.online server compatibility.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -243,9 +244,9 @@ Account *AccountManager::loadAccountHelper(QSettings &settings)
     QVariantMap capsValue = settings.value(capabilitesC()).value<QVariantMap>();
     Capabilities caps(url, capsValue);
     QUuid uid = settings.value(userUUIDC(), QVariant::fromValue(QUuid::createUuid())).toUuid();
-    // if spaces are not enabled, this is an oc10 account = nogo.
-    // if the starting caps are not even valid, forget all of it as well
-    if (!caps.isValid() || !caps.spacesSupport().enabled) {
+    // Accept both Infinite Scale productversion capabilities and ownCloud 10/11 legacy
+    // capabilities used by owncloud.online.
+    if (Account::supportLevelForCapabilities(caps) != Account::ServerSupportLevel::Supported) {
         // ignore this account and strip it from the config
         qCWarning(lcAccountManager) << "The capabilities for this account " << urlConfig << " are not supported by this client";
         // this should remove all keys in the group which == the account index

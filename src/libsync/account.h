@@ -1,5 +1,6 @@
 /*
  * Copyright (C) by Daniel Molkentin <danimo@owncloud.com>
+ * Modified by BW-Tech GmbH for owncloud.online server compatibility.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -191,6 +192,7 @@ public:
         Unsupported
     };
     Q_ENUMS(ServerSupportLevel)
+    static ServerSupportLevel supportLevelForCapabilities(const Capabilities &caps);
     ServerSupportLevel serverSupportLevel() const;
 
     /** True when the server connection is using HTTP2  */

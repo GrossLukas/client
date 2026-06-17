@@ -1,5 +1,6 @@
 /**
 * Copyright (c) 2000-2013 Liferay, Inc. All rights reserved.
+* Modified by BW-Tech GmbH for owncloud.online branding.
 *
 * This library is free software; you can redistribute it and/or modify it under
 * the terms of the GNU Lesser General Public License as published by the Free
@@ -22,7 +23,7 @@
 #define OVERLAY_GUID_WARNING        L"{0960F096-F328-48A3-B746-276B1E3C3722}"
 #define OVERLAY_GUID_WARNING_SHARED L"{0960F097-F328-48A3-B746-276B1E3C3722}"
 
-#define OVERLAY_GENERIC_NAME        L"ownCloud overlay handler"
+#define OVERLAY_GENERIC_NAME        L"owncloud.online overlay handler"
 
 // two spaces to put us ahead of the competition :/
 #define OVERLAY_NAME_ERROR          L"  OCError"
