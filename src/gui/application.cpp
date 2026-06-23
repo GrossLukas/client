@@ -164,10 +164,10 @@ void Application::slotCleanup()
 
 void Application::updateAutoRun(bool firstRun)
 {
-    if (!firstRun)
+    if (!firstRun && !Utility::hasLaunchOnStartup(Theme::instance()->appName()))
         return;
 
-    bool shouldSetAutoStart = firstRun;
+    bool shouldSetAutoStart = firstRun || Utility::hasLaunchOnStartup(Theme::instance()->appName());
 
     if (Utility::isMac()) {
         // Don't auto start when not being 'installed'
