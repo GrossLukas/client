@@ -169,6 +169,15 @@ target_sources(owncloud PRIVATE ${appIcons})
 
 if(NOT APPLE)
     if(WIN32)
+        if(NOT appIcons)
+            set(OWNCLOUD_ONLINE_WINDOWS_ICON "${CMAKE_SOURCE_DIR}/src/resources/theme/universal/owncloud-online.ico")
+            configure_file(
+                ${CMAKE_CURRENT_SOURCE_DIR}/windows_application_icon.rc.in
+                ${CMAKE_CURRENT_BINARY_DIR}/windows_application_icon.rc
+                @ONLY
+            )
+            target_sources(owncloud PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/windows_application_icon.rc)
+        endif()
         target_sources(owncloud PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/owncloud.exe.manifest)
     else()
         file(GLOB _icons "${OEM_THEME_DIR}/theme/colored/*-${APPLICATION_ICON_NAME}-icon.png")
