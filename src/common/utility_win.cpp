@@ -71,7 +71,7 @@ void Utility::setLaunchOnStartup(const QString &appName, const QString &guiName,
     Q_UNUSED(guiName)
     QSettings settings(runPathC(), QSettings::NativeFormat);
     if (enable) {
-        settings.setValue(appName, QDir::toNativeSeparators(QCoreApplication::applicationFilePath()));
+        settings.setValue(appName, QStringLiteral("\"%1\" --background").arg(QDir::toNativeSeparators(QCoreApplication::applicationFilePath())));
     } else {
         settings.remove(appName);
     }

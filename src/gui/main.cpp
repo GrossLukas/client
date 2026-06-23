@@ -78,6 +78,7 @@ void displayHelpText(const QString &t)
 struct CommandLineOptions
 {
     bool show = false;
+    bool background = false;
     bool quitInstance = false;
 
     QString logDir;
@@ -121,6 +122,10 @@ CommandLineOptions parseOptions(const QStringList &arguments)
     showSettingsLegacyOption.setFlags(QCommandLineOption::HiddenFromHelp);
     parser.addOption(showSettingsLegacyOption);
 
+    auto backgroundOption = QCommandLineOption{{QStringLiteral("background")}, QStringLiteral("Hidden startup option")};
+    backgroundOption.setFlags(QCommandLineOption::HiddenFromHelp);
+    parser.addOption(backgroundOption);
+
     auto showOption = addOption({{QStringLiteral("s"), QStringLiteral("show")},
         QApplication::translate("CommandLine",
             "Start with the main window visible, or if it is already running, bring it to the front. By default, the client launches in the background.")});
@@ -138,6 +143,9 @@ CommandLineOptions parseOptions(const QStringList &arguments)
     CommandLineOptions out;
     if (parser.isSet(showOption) || parser.isSet(showSettingsLegacyOption)) {
         out.show = true;
+    }
+    if (parser.isSet(backgroundOption)) {
+        out.background = true;
     }
     if (parser.isSet(quitInstanceOption)) {
         out.quitInstance = true;
@@ -402,6 +410,11 @@ int main(int argc, char **argv)
             }
 
             QStringList args = app.arguments();
+#ifdef Q_OS_WIN
+            if (!options.background && args.size() == 1) {
+                args << QStringLiteral("--show");
+            }
+#endif
             if (args.size() > 1) {
                 QString msg = args.join(QLatin1String("|"));
                 if (!singleApplication.sendMessage((msgParseOptionsC() + msg).toUtf8()))
@@ -481,7 +494,14 @@ int main(int argc, char **argv)
             return -1;
         }
 
-        if (options.show) {
+        bool showMainWindow = options.show;
+#ifdef Q_OS_WIN
+        if (!showMainWindow && !options.background && app.arguments().size() == 1 && !AccountManager::instance()->accounts().isEmpty()) {
+            showMainWindow = true;
+        }
+#endif
+
+        if (showMainWindow) {
             ocApp->gui()->slotShowSettings();
             // The user explicitly requested the settings dialog, so don't start the new-account wizard.
         }
