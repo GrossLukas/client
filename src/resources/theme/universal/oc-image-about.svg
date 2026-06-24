@@ -1,10 +1,10 @@
 <svg width="182" height="182" viewBox="0 0 182 182" fill="none" xmlns="http://www.w3.org/2000/svg">
-<!-- Modified by BW-Tech GmbH for owncloud.online branding. -->
-<rect width="182" height="182" rx="36" fill="#0A2540"/>
-<circle cx="62" cy="91" r="27" fill="#38D996"/>
-<circle cx="96" cy="91" r="27" fill="#21A6FF"/>
-<path d="M63 91C63 73.9 76.9 60 94 60H122C139.1 60 153 73.9 153 91C153 108.1 139.1 122 122 122H94C76.9 122 63 108.1 63 91Z" fill="white" fill-opacity=".94"/>
-<circle cx="94" cy="91" r="14" fill="#0A2540"/>
-<circle cx="122" cy="91" r="14" fill="#0A2540"/>
-<text x="34" y="154" fill="#FFFFFF" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="19" font-weight="700">owncloud.online</text>
+<!-- Modified by BW-Tech GmbH for owncloud.online branding. Source palette: owncloud.online. -->
+<rect width="182" height="182" rx="41" fill="#00c8b4"/>
+<circle cx="80" cy="78" r="33" fill="#ffffff" fill-opacity=".95"/>
+<circle cx="108" cy="75" r="27" fill="#ffffff" fill-opacity=".88"/>
+<circle cx="57" cy="96" r="23" fill="#ffffff" fill-opacity=".82"/>
+<circle cx="106" cy="105" r="32" fill="#ffffff" fill-opacity=".94"/>
+<path d="M45 124h91a26.6 26.6 0 0 0-26.6-26.6H71.6A26.6 26.6 0 0 0 45 124Z" fill="#ffffff"/>
+<text x="91" y="157" text-anchor="middle" fill="#064e4a" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="700">ownCloud.online</text>
 </svg>
