@@ -46,7 +46,7 @@ Q_GLOBAL_STATIC(IconCache, iconCache)
 
 QString vanillaThemePath()
 {
-    return QStringLiteral(":/client/ownCloud/theme");
+    return QStringLiteral(":/client/owncloud.online/theme");
 }
 
 QString brandThemePath()
