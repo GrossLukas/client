@@ -28,12 +28,12 @@ ownCloudTheme::ownCloudTheme()
 
 QColor ownCloudTheme::wizardHeaderBackgroundColor() const
 {
-    return QColor(QStringLiteral("#00c8b4"));
+    return QColor(QStringLiteral("#00E4BD"));
 }
 
 QColor ownCloudTheme::wizardHeaderTitleColor() const
 {
-    return QColor(QStringLiteral("#064e4a"));
+    return QColor(QStringLiteral("#262B45"));
 }
 
 QIcon ownCloudTheme::wizardHeaderLogo() const
