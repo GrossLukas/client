@@ -41,6 +41,8 @@ Q_LOGGING_CATEGORY(lcOauth, "sync.credentials.oauth", QtInfoMsg)
 namespace {
 
 const QString wellKnownPathC = QStringLiteral("/.well-known/openid-configuration");
+const QString ownCloudOAuthAuthorizePathC = QStringLiteral("/index.php/apps/oauth2/authorize");
+const QString ownCloudOAuthTokenPathC = QStringLiteral("/index.php/apps/oauth2/api/v1/token");
 
 OAuth::PromptValuesSupportedFlags defaultOauthPromptValue(const OpenIdConfig& config)
 {
@@ -380,6 +382,13 @@ void OAuth::fetchWellKnown()
 {
     qCDebug(lcOauth) << "fetching" << wellKnownPathC;
 
+    auto useOwnCloudOAuthFallback = [this]() {
+        _authEndpoint = Utility::concatUrlPath(_serverUrl, ownCloudOAuthAuthorizePathC);
+        _tokenEndpoint = Utility::concatUrlPath(_serverUrl, ownCloudOAuthTokenPathC);
+        _redirectUrl = Theme::instance()->oauthLocalhost();
+        _endpointAuthMethod = TokenEndpointAuthMethods::client_secret_basic;
+    };
+
     QNetworkRequest req;
     req.setAttribute(DontAddCredentialsAttribute, true);
     req.setUrl(Utility::concatUrlPath(_serverUrl, wellKnownPathC));
@@ -387,11 +396,14 @@ void OAuth::fetchWellKnown()
 
     auto reply = _networkAccessManager->get(req);
 
-    QObject::connect(reply, &QNetworkReply::finished, this, [reply, this] {
+    QObject::connect(reply, &QNetworkReply::finished, this, [reply, this, useOwnCloudOAuthFallback] {
         _wellKnownFinished = true;
         if (reply->error() != QNetworkReply::NoError) {
             qCDebug(lcOauth) << "failed to fetch .well-known reply, error:" << reply->error();
-            // Most likely the file does not exist, default to the normal endpoint
+            // Modified by BW-Tech GmbH: ownCloud 10 / owncloud.online OAuth2
+            // exposes no OpenID .well-known document. Use the legacy OAuth2
+            // routes so branded clients can still authenticate.
+            useOwnCloudOAuthFallback();
             Q_EMIT fetchWellKnownFinished();
             return;
         }
@@ -424,8 +436,15 @@ void OAuth::fetchWellKnown()
             qCDebug(lcOauth) << "parsing .well-known reply successful, auth endpoint" << _authEndpoint << "and token endpoint" << _tokenEndpoint;
         } else if (err.error == QJsonParseError::IllegalValue) {
             qCDebug(lcOauth) << "failed to parse .well-known reply as JSON, server might not support OIDC";
+            useOwnCloudOAuthFallback();
         } else {
             qCDebug(lcOauth) << "failed to parse .well-known reply, error:" << err.error;
+            useOwnCloudOAuthFallback();
+        }
+
+        if (!_authEndpoint.isValid() || !_tokenEndpoint.isValid()) {
+            qCDebug(lcOauth) << ".well-known response did not contain usable OAuth endpoints, falling back to ownCloud OAuth2 routes";
+            useOwnCloudOAuthFallback();
         }
         Q_EMIT fetchWellKnownFinished();
     });
