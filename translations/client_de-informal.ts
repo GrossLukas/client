@@ -692,18 +692,18 @@ Das Feature &quot;selective sync&quot; wird wieder verfügbar. Diese Aktion bric
     </message>
     <message>
         <location filename="../src/gui/newaccountwizard/advancedsettingspagecontroller.cpp" line="74"/>
-        <source>Sync and download files as you use them (saves hard drive space)</source>
-        <translation>Dateien werden synchronisiert und heruntergeladen, während sie verwendet werden (spart Festplattenspeicher).</translation>
+        <source>Use virtual files (download on demand)</source>
+        <translation>Virtuelle Dateien verwenden (Download bei Bedarf)</translation>
     </message>
     <message>
         <location filename="../src/gui/newaccountwizard/advancedsettingspagecontroller.cpp" line="79"/>
-        <source>Automatically sync and download folders and files</source>
-        <translation>Ordner und Dateien automatisch synchronisieren und herunterladen</translation>
+        <source>Download and sync all files</source>
+        <translation>Alle Dateien herunterladen und synchronisieren</translation>
     </message>
     <message>
         <location filename="../src/gui/newaccountwizard/advancedsettingspagecontroller.cpp" line="85"/>
-        <source>Sync and download folders manually</source>
-        <translation>Ordner manuell synchronisieren und herunterladen</translation>
+        <source>Choose folders to sync manually</source>
+        <translation>Ordner manuell zum Synchronisieren auswählen</translation>
     </message>
     <message>
         <location filename="../src/gui/newaccountwizard/advancedsettingspagecontroller.cpp" line="132"/>
@@ -712,8 +712,8 @@ Das Feature &quot;selective sync&quot; wird wieder verfügbar. Diese Aktion bric
     </message>
     <message>
         <location filename="../src/gui/newaccountwizard/advancedsettingspagecontroller.cpp" line="140"/>
-        <source>Browse…</source>
-        <translation>Durchsuchen…</translation>
+        <source>Browse...</source>
+        <translation>Durchsuchen...</translation>
     </message>
     <message>
         <location filename="../src/gui/newaccountwizard/advancedsettingspagecontroller.cpp" line="143"/>

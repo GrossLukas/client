@@ -6,7 +6,6 @@
 <circle cx="22" cy="40" r="7.4" fill="#ffffff" fill-opacity=".82"/>
 <circle cx="39" cy="44" r="10.2" fill="#ffffff" fill-opacity=".94"/>
 <path d="M18 50h32a9.4 9.4 0 0 0-9.4-9.4H27.4A9.4 9.4 0 0 0 18 50Z" fill="#ffffff"/>
-<text x="34" y="62" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="6.6" font-weight="700" fill="#064e4a">ONLINE</text>
 <text x="78" y="40" fill="#064e4a" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="27" font-weight="700">ownCloud.online</text>
 <text x="80" y="62" fill="#064e4a" fill-opacity=".74" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="600">Desktop Sync Client</text>
 </svg>

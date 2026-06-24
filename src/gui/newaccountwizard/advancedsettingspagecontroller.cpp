@@ -71,18 +71,18 @@ void AdvancedSettingsPageController::buildPage()
     layout->addSpacing(8);
     layout->addWidget(syncOptionsLabel, Qt::AlignLeft);
 
-    QRadioButton *vfsButton = new QRadioButton(tr("Sync and download files as you use them (saves hard drive space)"), _page);
+    QRadioButton *vfsButton = new QRadioButton(tr("Use virtual files (download on demand)"), _page);
     vfsButton->setFocusPolicy(Qt::StrongFocus);
     _buttonGroup->addButton(vfsButton, NewAccount::SyncType::USE_VFS);
     layout->addWidget(vfsButton, Qt::AlignLeft);
 
-    QRadioButton *syncAllButton = new QRadioButton(tr("Automatically sync and download folders and files"), _page);
+    QRadioButton *syncAllButton = new QRadioButton(tr("Download and sync all files"), _page);
     syncAllButton->setObjectName("SyncAllRadioButton");
     syncAllButton->setFocusPolicy(Qt::StrongFocus);
     _buttonGroup->addButton(syncAllButton, NewAccount::SyncType::SYNC_ALL);
     layout->addWidget(syncAllButton, Qt::AlignLeft);
 
-    QRadioButton *selectiveSyncButton = new QRadioButton(tr("Sync and download folders manually"), _page);
+    QRadioButton *selectiveSyncButton = new QRadioButton(tr("Choose folders to sync manually"), _page);
     selectiveSyncButton->setObjectName("SelectiveSyncRadioButton");
     selectiveSyncButton->setFocusPolicy(Qt::StrongFocus);
     _buttonGroup->addButton(selectiveSyncButton, NewAccount::SyncType::SELECTIVE_SYNC);
@@ -137,7 +137,7 @@ void AdvancedSettingsPageController::buildPage()
     });
     connect(_rootDirEdit, &QLineEdit::editingFinished, this, &AdvancedSettingsPageController::onRootDirFieldEdited);
 
-    _folderButton = new QPushButton(tr("Browse…"), _page);
+    _folderButton = new QPushButton(tr("Browse..."), _page);
     _folderButton->setObjectName("BrowseButton");
     _folderButton->setFocusPolicy(Qt::StrongFocus);
     _folderButton->setAccessibleDescription(tr("Browse for a download location"));

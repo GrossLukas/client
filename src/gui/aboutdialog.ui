@@ -60,7 +60,7 @@
               <string notr="true"/>
              </property>
              <property name="pixmap">
-              <pixmap>:/client/ownCloud/theme/universal/owncloud-icon.svg</pixmap>
+              <pixmap>:/client/owncloud.online/theme/universal/owncloud-online-icon.svg</pixmap>
              </property>
             </widget>
            </item>

@@ -6,5 +6,4 @@
 <circle cx="40" cy="70" r="16" fill="#ffffff" fill-opacity=".82"/>
 <circle cx="75" cy="77" r="22" fill="#ffffff" fill-opacity=".94"/>
 <path d="M32 88h64a18.7 18.7 0 0 0-18.7-18.7H50.7A18.7 18.7 0 0 0 32 88Z" fill="#ffffff"/>
-<text x="64" y="111" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="700" fill="#064e4a">ONLINE</text>
 </svg>
