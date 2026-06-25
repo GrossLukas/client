@@ -12,6 +12,9 @@ env:
 
 jobs:
   gui-tests:
+    # Only run in the canonical owncloud.online client repo so the daily cron
+    # does not fire in forks (which lack the required secrets).
+    if: github.repository == 'GrossLukas/client'
     runs-on: ubuntu-latest
     container: owncloudci/squish:fedora-42-8.1.0-qt68x-linux64
     env:
