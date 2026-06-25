@@ -118,7 +118,7 @@ public:
         CustomState } state = StartState;
     Q_ENUM(State);
 
-    QString localHost = QStringLiteral("127.0.0.1");
+    QString localHost = QStringLiteral("localhost");
     bool replyToBrowserOk = false;
     bool gotAuthOk = false;
     virtual bool done() const { return replyToBrowserOk && gotAuthOk; }
@@ -423,7 +423,7 @@ private Q_SLOTS:
         struct Test : OAuthTestCase {
             Test()
             {
-                localHost = QStringLiteral("127.0.0.1");
+                localHost = QStringLiteral("localhost");
             }
 
             void openBrowserHook(const QUrl & url) override {
@@ -451,7 +451,7 @@ private Q_SLOTS:
         struct Test : OAuthTestCase {
             Test()
             {
-                localHost = QStringLiteral("127.0.0.1");
+                localHost = QStringLiteral("localhost");
             }
 
             QNetworkReply *wellKnownReply(QNetworkAccessManager::Operation op, const QNetworkRequest &req) override
@@ -461,22 +461,24 @@ private Q_SLOTS:
 
             void oauthResult(OAuth::Result result, const QString &token, const QString &refreshToken) override
             {
-                QCOMPARE(result, OAuth::ErrorIdPUnreachable);
-                QCOMPARE(state, StatusPhpState);
-                QCOMPARE(token, QStringLiteral(""));
-                QCOMPARE(refreshToken, QStringLiteral(""));
+                OAuthTestCase::oauthResult(result, token, refreshToken);
             }
 
             void openBrowserHook(const QUrl & url) override {
-                OC_ASSERT(url.host() == QStringLiteral("openidserver"));
-                QUrl url2 = url;
-                url2.setHost(sOpenIdBaseURL.host());
-                OAuthTestCase::openBrowserHook(url2);
+                QCOMPARE(state, StatusPhpState);
+                state = BrowserOpened;
+                QCOMPARE(url.host(), sOpenIdBaseURL.host());
+                QCOMPARE(url.path(), QStringLiteral("/index.php/apps/oauth2/authorize"));
+                QUrlQuery query(url);
+                QCOMPARE(query.queryItemValue(QStringLiteral("response_type")), QLatin1String("code"));
+                QCOMPARE(query.queryItemValue(QStringLiteral("client_id")), _expectedClientId);
+                QUrl redirectUri(query.queryItemValue(QStringLiteral("redirect_uri")));
+                QCOMPARE(redirectUri.host(), localHost);
+                redirectUri.setQuery(QStringLiteral("code=%1&state=%2").arg(code, query.queryItemValue(QStringLiteral("state"))));
+                createBrowserReply(QNetworkRequest(redirectUri));
             }
         } test;
-        test.runTest();
-        QTRY_VERIFY(test.gotAuthOk == false);
-        QTRY_VERIFY(test.replyToBrowserOk == false);
+        test.test();
     }
 
     void testTimeout()
@@ -488,7 +490,7 @@ private Q_SLOTS:
             Test()
                 : rollback(AbstractNetworkJob::httpTimeout, 1s)
             {
-                localHost = QStringLiteral("127.0.0.1");
+                localHost = QStringLiteral("localhost");
             }
 
             QNetworkReply *statusPhpReply(QNetworkAccessManager::Operation op, const QNetworkRequest &req) override
