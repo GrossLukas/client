@@ -5,7 +5,9 @@ set( MIRALL_VERSION_YEAR  2026 )
 set( MIRALL_SOVERSION 0 )
 
 if ( NOT DEFINED MIRALL_VERSION_SUFFIX )
-    set( MIRALL_VERSION_SUFFIX "git") #e.g. beta1, beta2, rc1
+    # Release builds ship a clean version (e.g. 7.2.0). For nightly/dev builds
+    # pass -DMIRALL_VERSION_SUFFIX=git (or beta1, rc1, ...) on the CMake line.
+    set( MIRALL_VERSION_SUFFIX "")
 endif( NOT DEFINED MIRALL_VERSION_SUFFIX )
 
 if( NOT DEFINED MIRALL_VERSION_BUILD )
