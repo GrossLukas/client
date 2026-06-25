@@ -236,7 +236,7 @@
          <cursorShape>ArrowCursor</cursorShape>
         </property>
         <property name="text">
-         <string notr="true">Copyright ownCloud GmbH (A Kiteworks Company)</string>
+         <string notr="true">Copyright BW-Tech GmbH · owncloud.online</string>
         </property>
         <property name="textInteractionFlags">
          <set>Qt::LinksAccessibleByMouse|Qt::TextSelectableByMouse</set>
