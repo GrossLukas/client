@@ -32,7 +32,11 @@ QUrl Resources::QMLResources::resourcePath2(const QString &provider, const QStri
 
 QUrl Resources::QMLResources::resourcePath(const QString &theme, const QString &icon, bool enabled)
 {
-    return resourcePath2(QStringLiteral(APPLICATION_SHORTNAME), icon, enabled, {{QStringLiteral("theme"), theme}});
+    // The CoreImageProvider is registered under the fixed scheme host "ownCloud"
+    // (see OCQuickWidget). Use it verbatim instead of APPLICATION_SHORTNAME, which
+    // the owncloud.online branding changed to "owncloud.online" and thereby broke
+    // every glyph icon (image://owncloud.online/… had no provider -> blank icons).
+    return resourcePath2(QStringLiteral("ownCloud"), icon, enabled, {{QStringLiteral("theme"), theme}});
 }
 
 Resources::QMLResources::Icon Resources::QMLResources::parseIcon(const QString &id)
