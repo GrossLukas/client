@@ -169,6 +169,11 @@ target_sources(owncloud PRIVATE ${appIcons})
 
 if(NOT APPLE)
     if(WIN32)
+        configure_file(
+            ${CMAKE_SOURCE_DIR}/src/resources/theme/universal/owncloud-online.ico
+            ${CMAKE_CURRENT_BINARY_DIR}/owncloud.ico
+            COPYONLY
+        )
         if(NOT appIcons)
             set(OWNCLOUD_ONLINE_WINDOWS_ICON "${CMAKE_SOURCE_DIR}/src/resources/theme/universal/owncloud-online.ico")
             configure_file(
@@ -208,6 +213,9 @@ if(UNIX AND NOT APPLE)
     configure_file(${CMAKE_SOURCE_DIR}/owncloud.desktop.in
                    ${CMAKE_CURRENT_BINARY_DIR}/${APPLICATION_EXECUTABLE}.desktop)
     install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/${APPLICATION_EXECUTABLE}.desktop DESTINATION ${KDE_INSTALL_DATADIR}/applications )
+    configure_file(${CMAKE_SOURCE_DIR}/owncloud.desktop.in
+                   ${CMAKE_CURRENT_BINARY_DIR}/owncloud.desktop)
+    install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/owncloud.desktop DESTINATION ${KDE_INSTALL_DATADIR}/applications )
 
     configure_file(owncloud.xml.in ${APPLICATION_EXECUTABLE}.xml)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${APPLICATION_EXECUTABLE}.xml DESTINATION ${KDE_INSTALL_DATADIR}/mime/packages )
