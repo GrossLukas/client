@@ -39,6 +39,7 @@
 #include <QApplication>
 #include <QDesktopServices>
 #include <QFileOpenEvent>
+#include <QTimer>
 
 namespace OCC {
 
@@ -114,6 +115,16 @@ Application::Application(Platform *platform, const QString &displayLanguage, boo
     // Cleanup at Quit.
     connect(qApp, &QCoreApplication::aboutToQuit, this, &Application::slotCleanup);
     qApp->installEventFilter(this);
+
+    // owncloud.online: optionally bring up the main window on startup instead of
+    // starting silently into the system tray (toggle in General settings).
+    if (ConfigFile().showMainDialogOnStartup()) {
+        QTimer::singleShot(0, this, [this] {
+            if (_gui) {
+                gui()->slotOpenSettingsDialog();
+            }
+        });
+    }
 }
 
 Application::~Application()

@@ -84,6 +84,7 @@ const QString pauseSyncWhenMeteredC()
     return QStringLiteral("pauseWhenMetered");
 }
 const QString moveToTrashC() { return QStringLiteral("moveToTrash"); }
+const QString showMainDialogOnStartupC() { return QStringLiteral("showMainDialogOnStartup"); }
 
 const QString issuesWidgetFilterC()
 {
@@ -502,6 +503,16 @@ bool ConfigFile::moveToTrash() const
 void ConfigFile::setMoveToTrash(bool isChecked)
 {
     setValue(moveToTrashC(), isChecked);
+}
+
+bool ConfigFile::showMainDialogOnStartup() const
+{
+    return getValue(showMainDialogOnStartupC(), QString(), false).toBool();
+}
+
+void ConfigFile::setShowMainDialogOnStartup(bool isChecked)
+{
+    setValue(showMainDialogOnStartupC(), isChecked);
 }
 
 bool ConfigFile::promptDeleteFiles() const

@@ -127,6 +127,10 @@ public:
     bool moveToTrash() const;
     void setMoveToTrash(bool);
 
+    /** Show the main window on startup instead of starting to the system tray only */
+    bool showMainDialogOnStartup() const;
+    void setShowMainDialogOnStartup(bool);
+
     /// Used for testing, so we do not change the user's config file.
     static bool setConfDir(const QString &value);
 
