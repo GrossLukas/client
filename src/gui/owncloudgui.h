@@ -18,10 +18,13 @@
 #include "progressdispatcher.h"
 #include "syncresult.h"
 
+#include <QDateTime>
 #include <QMenu>
 #include <QObject>
 #include <QPointer>
 #include <QSystemTrayIcon>
+
+class QTimer;
 
 namespace OCC {
 
@@ -66,6 +69,13 @@ Q_SIGNALS:
 
 public Q_SLOTS:
     void setupTrayContextMenu();
+
+    /** Globally pause syncing for the given number of minutes (0 = until manually
+        resumed). Stops the scheduler without touching per-folder paused state. */
+    void pauseSyncFor(int minutes);
+    /** Resume globally paused syncing and trigger a sync right away. */
+    void resumeSync();
+
     void slotComputeOverallSyncStatus();
     void slotShowTrayMessage(const QString &title, const QString &msg, const QIcon &icon = {});
     void slotShowOptionalTrayMessage(const QString &title, const QString &msg, const QIcon &icon = {});
@@ -92,9 +102,19 @@ public Q_SLOTS:
 private:
     QIcon getTrayStatusIcon(const SyncResult::Status &status) const;
 
+    /** Refresh the tray menu pause/resume entries to reflect the current pause state. */
+    void updatePauseSyncMenuState();
+
     QSystemTrayIcon *_tray;
     SettingsDialog *_settingsDialog;
     QPointer<ShareDialog> _shareDialog;
+
+    // Tray "Pause synchronization" feature
+    QMenu *_pauseSyncMenu = nullptr;
+    QPointer<QAction> _resumeSyncAction;
+    QTimer *_pauseSyncTimer = nullptr;
+    QDateTime _syncPausedUntil; //!< valid only for a timed pause; invalid while running or paused indefinitely
+    bool _syncPaused = false;
 
     Application *_app;
 
