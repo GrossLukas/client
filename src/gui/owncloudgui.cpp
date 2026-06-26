@@ -40,6 +40,9 @@
 #include <QDesktopServices>
 #include <QDialog>
 #include <QMessageBox>
+#include <QTimer>
+
+#include <chrono>
 
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
@@ -99,6 +102,11 @@ ownCloudGui::ownCloudGui(Application *parent)
 {
     connect(_tray, &QSystemTrayIcon::activated,
         this, &ownCloudGui::slotTrayClicked);
+
+    // Timer that auto-resumes a timed "pause synchronization" request.
+    _pauseSyncTimer = new QTimer(this);
+    _pauseSyncTimer->setSingleShot(true);
+    connect(_pauseSyncTimer, &QTimer::timeout, this, &ownCloudGui::resumeSync);
 
     setupTrayContextMenu();
 
@@ -211,6 +219,16 @@ void ownCloudGui::setupTrayContextMenu()
     menu->addAction(Theme::instance()->applicationIcon(), tr("Show %1").arg(Theme::instance()->appNameGUI()), this, &ownCloudGui::slotShowSettings);
     menu->addSeparator();
 
+    // owncloud.online: let the user temporarily pause syncing; it auto-resumes via
+    // _pauseSyncTimer (or immediately via the "Resume" entry).
+    _pauseSyncMenu = menu->addMenu(tr("Pause synchronization"));
+    _pauseSyncMenu->addAction(tr("For 30 minutes"), this, [this] { pauseSyncFor(30); });
+    _pauseSyncMenu->addAction(tr("For 1 hour"), this, [this] { pauseSyncFor(60); });
+    _pauseSyncMenu->addAction(tr("Until I resume"), this, [this] { pauseSyncFor(0); });
+    _resumeSyncAction = menu->addAction(tr("Resume synchronization"), this, [this] { resumeSync(); });
+    updatePauseSyncMenuState();
+    menu->addSeparator();
+
     if (_app->debugMode()) {
         auto *debugMenu = menu->addMenu(QStringLiteral("Debug actions"));
         debugMenu->addAction(QStringLiteral("Crash if asserts enabled - OC_ENSURE"), _app, [] {
@@ -241,6 +259,54 @@ void ownCloudGui::setupTrayContextMenu()
     }
 
     menu->addAction(tr("Quit %1").arg(Theme::instance()->appNameGUI()), _app, &QApplication::quit);
+}
+
+void ownCloudGui::pauseSyncFor(int minutes)
+{
+    // Globally stop the scheduler without touching the per-folder paused state, so
+    // folders the user paused individually stay paused and are not silently resumed
+    // later. (An internal setSyncEnabled(true) triggered by actively adding a folder
+    // during the pause window would end the pause early, which is harmless.)
+    FolderMan::instance()->setSyncEnabled(false);
+
+    _pauseSyncTimer->stop();
+    _syncPaused = true;
+    if (minutes > 0) {
+        _syncPausedUntil = QDateTime::currentDateTime().addSecs(static_cast<qint64>(minutes) * 60);
+        _pauseSyncTimer->start(std::chrono::minutes(minutes));
+    } else {
+        _syncPausedUntil = QDateTime(); // paused until manually resumed
+    }
+    qCInfo(lcApplication) << "Sync paused by user for" << minutes << "minutes (0 = indefinite)";
+    updatePauseSyncMenuState();
+}
+
+void ownCloudGui::resumeSync()
+{
+    _pauseSyncTimer->stop();
+    _syncPaused = false;
+    _syncPausedUntil = QDateTime();
+
+    // Re-enables the scheduler; queued and pending folders resume syncing.
+    FolderMan::instance()->setSyncEnabled(true);
+    qCInfo(lcApplication) << "Sync resumed by user";
+    updatePauseSyncMenuState();
+}
+
+void ownCloudGui::updatePauseSyncMenuState()
+{
+    if (_pauseSyncMenu) {
+        _pauseSyncMenu->menuAction()->setVisible(!_syncPaused);
+    }
+    if (_resumeSyncAction) {
+        _resumeSyncAction->setVisible(_syncPaused);
+        if (_syncPaused && _syncPausedUntil.isValid()) {
+            _resumeSyncAction->setText(
+                tr("Resume synchronization (paused until %1)").arg(_syncPausedUntil.toString(QStringLiteral("HH:mm"))));
+        } else {
+            _resumeSyncAction->setText(tr("Resume synchronization"));
+        }
+    }
 }
 
 void ownCloudGui::slotShowTrayMessage(const QString &title, const QString &msg, const QIcon &icon)
