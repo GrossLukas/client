@@ -182,6 +182,10 @@ public:
     /// Whether chunked uploads are enabled at all (files/bigfilechunking).
     bool bigfilechunkingEnabled() const;
 
+    /// Whether the server offers the bulk upload endpoint (POST /remote.php/dav/bulk)
+    /// for sending many small files in a single multipart request.
+    bool bulkUpload() const;
+
     /// returns true if the capabilities are loaded already.
     bool isValid() const;
 

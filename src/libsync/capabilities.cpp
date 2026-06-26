@@ -184,6 +184,14 @@ bool Capabilities::bigfilechunkingEnabled() const
     return _capabilities.value(QStringLiteral("files")).toMap().value(QStringLiteral("bigfilechunking"), true).toBool();
 }
 
+bool Capabilities::bulkUpload() const
+{
+    if (qEnvironmentVariable("OWNCLOUD_BULK_UPLOAD") == QLatin1String("0")) {
+        return false;
+    }
+    return !_capabilities.value(QStringLiteral("dav")).toMap().value(QStringLiteral("bulkupload")).toString().isEmpty();
+}
+
 Status::Status(const QVariantMap &status)
 {
     legacyVersion = QVersionNumber::fromString(status.value(QStringLiteral("version")).toString());
