@@ -18,6 +18,7 @@
 
 #include "accessmanager.h"
 #include "common/utility.h"
+#include "configfile.h"
 #include "cookiejar.h"
 #include "httplogger.h"
 
@@ -92,10 +93,14 @@ QNetworkReply *AccessManager::createRequest(QNetworkAccessManager::Operation op,
 
     // todo: #23
     if (newRequest.url().scheme() == QLatin1String("https")) { // Not for "http": QTBUG-61397
-        // http2 seems to cause issues, as with our recommended server setup we don't support http2, disable it by default for now
-        static const bool http2EnabledEnv = qEnvironmentVariableIntValue("OWNCLOUD_HTTP2_ENABLED") == 1;
+        // http2 can stall with some server setups, so it stays opt-in and OFF by
+        // default. It can be enabled via the OWNCLOUD_HTTP2_ENABLED env var (for
+        // testing) or the "Enable HTTP/2" option in the general settings. Read once
+        // per process to avoid config I/O on every request; toggling needs a restart.
+        static const bool http2Enabled =
+            qEnvironmentVariableIntValue("OWNCLOUD_HTTP2_ENABLED") == 1 || ConfigFile().enableHttp2();
 
-        newRequest.setAttribute(QNetworkRequest::Http2AllowedAttribute, http2EnabledEnv);
+        newRequest.setAttribute(QNetworkRequest::Http2AllowedAttribute, http2Enabled);
     }
 
     // allow http pipelining
