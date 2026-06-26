@@ -561,7 +561,9 @@ bool Theme::enableCernBranding() const
 
 bool Theme::spacesAreCalledFolders() const
 {
-    return false;
+    // owncloud.online (11.x) has no "Spaces" concept; the UI talks about folders.
+    // "Space" wording is misleading here, so present everything as "folder".
+    return true;
 }
 
 bool Theme::withCrashReporter() const
