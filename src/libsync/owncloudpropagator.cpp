@@ -25,6 +25,7 @@
 #include "propagateremotedelete.h"
 #include "propagateremotemkdir.h"
 #include "propagateremotemove.h"
+#include "bulkpropagatorjob.h"
 #include "propagateuploadfile.h"
 #include "propagateuploadng.h"
 #include "propagateuploadtus.h"
@@ -929,6 +930,34 @@ bool PropagatorCompositeJob::scheduleSelfOrChild()
     }
 
     // Now it's our turn, check if we have something left to do.
+    // owncloud.online: when the server supports the bulk endpoint, batch eligible
+    // small new-file uploads into a single multipart request instead of one PUT
+    // each. Only kicks in for capabilities.dav.bulkupload; otherwise nothing changes.
+    if (_jobsToDo.empty() && !_tasksToDo.empty() && propagator()->account()->capabilities().bulkUpload()) {
+        QVector<SyncFileItemPtr> bulkBatch;
+        qint64 bulkBatchSize = 0;
+        for (auto it = _tasksToDo.begin();
+             it != _tasksToDo.end() && bulkBatch.size() < BulkPropagatorJob::maxBulkBatchCount;) {
+            const SyncFileItemPtr &item = *it;
+            const bool eligible = item->_direction == SyncFileItem::Up
+                && item->_type == ItemTypeFile
+                && (item->instruction() == CSYNC_INSTRUCTION_NEW || item->instruction() == CSYNC_INSTRUCTION_SYNC)
+                && item->_size > 0
+                && item->_size <= BulkPropagatorJob::maxBulkFileSize
+                && (bulkBatchSize + item->_size) <= BulkPropagatorJob::maxBulkBatchSize;
+            if (eligible) {
+                bulkBatchSize += item->_size;
+                bulkBatch.append(item);
+                it = _tasksToDo.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        if (!bulkBatch.isEmpty()) {
+            appendJob(new BulkPropagatorJob(propagator(), std::move(bulkBatch)));
+        }
+    }
+
     // First, convert a task to a job if necessary
     while (_jobsToDo.empty() && !_tasksToDo.empty()) {
         const SyncFileItemPtr nextTask = *_tasksToDo.begin();
