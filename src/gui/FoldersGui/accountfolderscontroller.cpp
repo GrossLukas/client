@@ -68,7 +68,13 @@ void AccountFoldersController::onUnsyncedSpaceCountChanged(const QUuid &accountI
     if (accountId != _accountId)
         return;
 
-    _view->enableAddFolder(unsyncedSpaceCount > 0);
+    // ownCloud 10 (owncloud.online) servers have no "spaces", so unsyncedSpaceCount
+    // is always 0 there. Gating the add button on it would wrongly disable adding
+    // another folder sync. Keep the button enabled for non-spaces accounts; for
+    // spaces accounts, only enable it when there is at least one unsynced space.
+    const bool spacesEnabled = _accountState && _accountState->account()
+        && _accountState->account()->capabilities().spacesSupport().enabled;
+    _view->enableAddFolder(!spacesEnabled || unsyncedSpaceCount > 0);
     // sometimes we have folders that are related to a space which has been removed server side. Because of this,
     // sometimes the total "synced" count can be larger than the space count, so min the diff to get something reasonable
     int reasonableCount = qMin(totalSpaceCount - unsyncedSpaceCount, totalSpaceCount);
