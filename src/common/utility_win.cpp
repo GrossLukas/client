@@ -21,6 +21,7 @@
 
 #include <comdef.h>
 #include <qt_windows.h>
+#include <shellapi.h>
 #include <shlguid.h>
 #include <shlobj.h>
 
@@ -49,9 +50,30 @@ const QString systemThemesC()
 }
 
 namespace OCC {
-// important: this is mac only, hence the empty impl here
-void Utility::setupFavLink(const QString &)
+
+void Utility::setupFavLink(const QString &folder)
 {
+    // Pin the sync folder to Explorer's "Quick access" (Schnellzugriff) so it shows
+    // up in the navigation pane and the user gets a one-click shortcut to it,
+    // similar to OneDrive. Uses the shell "pintohome" verb and is a no-op if the
+    // folder is already pinned. (Virtual-files folders get their own nav-pane entry
+    // from the Windows Cloud Files API, so setupFavLink is only used for plain
+    // sync folders — see FolderMan.)
+    if (folder.isEmpty()) {
+        return;
+    }
+    const std::wstring nativePath = QDir::toNativeSeparators(folder).toStdWString();
+
+    SHELLEXECUTEINFOW sei;
+    ZeroMemory(&sei, sizeof(sei));
+    sei.cbSize = sizeof(sei);
+    sei.fMask = SEE_MASK_INVOKEIDLIST | SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC;
+    sei.lpVerb = L"pintohome";
+    sei.lpFile = nativePath.c_str();
+    sei.nShow = SW_HIDE;
+    if (!ShellExecuteExW(&sei)) {
+        qWarning() << "setupFavLink: could not pin" << folder << "to Quick access, error" << GetLastError();
+    }
 }
 
 bool Utility::hasSystemLaunchOnStartup(const QString &appName)
