@@ -792,8 +792,8 @@ Die Aktualisierung wird im Hintergrund durchgeführt und überschreibt die aktue
     </message>
     <message>
         <location filename="../src/gui/newaccountwizard/authsuccesspagecontroller.cpp" line="47"/>
-        <source>You&apos;re all set! Open %1 and get started.</source>
-        <translation>Sie sind fertig! Öffnen Sie %1 und legen Sie los.</translation>
+        <source>You are almost set! The synchronization options are under Advanced. By default the client enables the Virtual File System (VFS) and only downloads files when you open them.</source>
+        <translation>Sie sind fast fertig! Unter den „Erweitert"-Einstellungen finden Sie die Synchronisationsoptionen. Der Client aktiviert standardmäßig VFS (Virtual File System) und lädt Dateien erst dann herunter, wenn Sie diese nutzen.</translation>
     </message>
     <message>
         <location filename="../src/gui/newaccountwizard/authsuccesspagecontroller.cpp" line="64"/>
