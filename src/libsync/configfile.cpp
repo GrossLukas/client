@@ -85,6 +85,7 @@ const QString pauseSyncWhenMeteredC()
 }
 const QString moveToTrashC() { return QStringLiteral("moveToTrash"); }
 const QString showMainDialogOnStartupC() { return QStringLiteral("showMainDialogOnStartup"); }
+const QString enableHttp2C() { return QStringLiteral("enableHttp2"); }
 
 const QString issuesWidgetFilterC()
 {
@@ -513,6 +514,16 @@ bool ConfigFile::showMainDialogOnStartup() const
 void ConfigFile::setShowMainDialogOnStartup(bool isChecked)
 {
     setValue(showMainDialogOnStartupC(), isChecked);
+}
+
+bool ConfigFile::enableHttp2() const
+{
+    return getValue(enableHttp2C(), QString(), false).toBool();
+}
+
+void ConfigFile::setEnableHttp2(bool enabled)
+{
+    setValue(enableHttp2C(), enabled);
 }
 
 bool ConfigFile::promptDeleteFiles() const

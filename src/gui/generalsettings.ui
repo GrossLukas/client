@@ -141,6 +141,16 @@
              </widget>
             </item>
             <item>
+             <widget class="QCheckBox" name="enableHttp2CheckBox">
+              <property name="toolTip">
+               <string>HTTP/2 reuses a single connection for many requests, which can speed up syncing on high-latency links. Experimental: leave off if your server has issues. Takes effect after a restart.</string>
+              </property>
+              <property name="text">
+               <string>Enable HTTP/2 (experimental, requires restart)</string>
+              </property>
+             </widget>
+            </item>
+            <item>
              <layout class="QHBoxLayout" name="horizontalLayout_4">
               <item>
                <widget class="QPushButton" name="ignoredFilesButton">
@@ -278,6 +288,7 @@
   <tabstop>syncHiddenFilesCheckBox</tabstop>
   <tabstop>crashreporterCheckBox</tabstop>
   <tabstop>moveToTrashCheckBox</tabstop>
+  <tabstop>enableHttp2CheckBox</tabstop>
   <tabstop>ignoredFilesButton</tabstop>
   <tabstop>logSettingsButton</tabstop>
   <tabstop>widget</tabstop>

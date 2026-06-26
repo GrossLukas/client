@@ -131,6 +131,11 @@ public:
     bool showMainDialogOnStartup() const;
     void setShowMainDialogOnStartup(bool);
 
+    /** Allow HTTP/2 for HTTPS connections. Opt-in/experimental, off by default;
+        toggling takes effect after a restart. */
+    bool enableHttp2() const;
+    void setEnableHttp2(bool enabled);
+
     /// Used for testing, so we do not change the user's config file.
     static bool setConfDir(const QString &value);
 

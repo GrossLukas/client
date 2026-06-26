@@ -48,6 +48,9 @@ GeneralSettings::GeneralSettings(QWidget *parent)
     connect(_ui->showWindowOnStartCheckBox, &QCheckBox::toggled, this, [](bool checked) {
         ConfigFile().setShowMainDialogOnStartup(checked);
     });
+    connect(_ui->enableHttp2CheckBox, &QCheckBox::toggled, this, [](bool checked) {
+        ConfigFile().setEnableHttp2(checked);
+    });
 
     connect(_ui->languageDropdown, QOverload<int>::of(&QComboBox::activated), this, [this]() {
         // first, store selected language in config file
@@ -103,6 +106,7 @@ void GeneralSettings::loadMiscSettings()
     _ui->crashreporterCheckBox->setChecked(cfgFile.crashReporter());
     _ui->monoIconsCheckBox->setChecked(cfgFile.monoIcons());
     _ui->showWindowOnStartCheckBox->setChecked(cfgFile.showMainDialogOnStartup());
+    _ui->enableHttp2CheckBox->setChecked(cfgFile.enableHttp2());
 
     // the dropdown has to be populated before we can can pick an entry below based on the stored setting
     loadLanguageNamesIntoDropdown();
