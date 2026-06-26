@@ -14,6 +14,7 @@
 
 #include "propagatedownload.h"
 #include "account.h"
+#include "bandwidthmanager.h"
 #include "filesystem.h"
 #include "networkjobs.h"
 #include "owncloudpropagator_p.h"
@@ -176,6 +177,9 @@ GETFileJob::GETFileJob(Account *account, const QUrl &url, const QString &path, Q
 
 void GETFileJob::start()
 {
+    if (_bandwidthManager) {
+        _bandwidthManager->registerDownloadJob(this);
+    }
     if (_resumeStart > 0) {
         _headers["Range"] = "bytes=" + QByteArray::number(_resumeStart) + '-';
         _headers["Accept-Ranges"] = "bytes";
@@ -194,6 +198,9 @@ void GETFileJob::start()
 
 void GETFileJob::finished()
 {
+    if (_bandwidthManager) {
+        _bandwidthManager->unregisterDownloadJob(this);
+    }
     if (reply()->bytesAvailable() && _httpOk) {
         // we were throttled, write out the remaining data
         slotReadyRead();
@@ -312,6 +319,33 @@ qint64 GETFileJob::currentDownloadPosition()
     return _resumeStart;
 }
 
+void GETFileJob::setBandwidthManager(BandwidthManager *bwm)
+{
+    _bandwidthManager = bwm;
+}
+
+void GETFileJob::setChoked(bool c)
+{
+    if (c != _bandwidthChoked) {
+        _bandwidthChoked = c;
+        QMetaObject::invokeMethod(this, &GETFileJob::slotReadyRead, Qt::QueuedConnection);
+    }
+}
+
+void GETFileJob::setBandwidthLimited(bool b)
+{
+    if (_bandwidthLimited != b) {
+        _bandwidthLimited = b;
+        QMetaObject::invokeMethod(this, &GETFileJob::slotReadyRead, Qt::QueuedConnection);
+    }
+}
+
+void GETFileJob::giveBandwidthQuota(qint64 q)
+{
+    _bandwidthQuota = q;
+    QMetaObject::invokeMethod(this, &GETFileJob::slotReadyRead, Qt::QueuedConnection);
+}
+
 void GETFileJob::slotReadyRead()
 {
     Q_ASSERT(reply());
@@ -323,7 +357,19 @@ void GETFileJob::slotReadyRead()
     QByteArray buffer(bufferSize, Qt::Uninitialized);
 
     while (reply()->bytesAvailable() > 0) {
+        if (_bandwidthChoked) {
+            qCWarning(lcGetJob) << "Download choked";
+            break;
+        }
         qint64 toRead = bufferSize;
+        if (_bandwidthLimited) {
+            toRead = std::min<qint64>(bufferSize, _bandwidthQuota);
+            if (toRead == 0) {
+                qCWarning(lcGetJob) << "Out of bandwidth quota";
+                break;
+            }
+            _bandwidthQuota -= toRead;
+        }
         const qint64 read = reply()->read(buffer.data(), toRead);
         if (read < 0) {
             _errorString = networkReplyErrorString(*reply());
@@ -584,6 +630,7 @@ void PropagateDownloadFile::startFullDownload()
         _job = new GETFileJob(propagator()->account(), url, {}, &_tmpFile, headers, _expectedEtagForResume, _resumeStart, this);
     }
     _job->setExpectedContentLength(_item->_size - _resumeStart);
+    _job->setBandwidthManager(propagator()->_bandwidthManager);
 
     connect(_job.data(), &GETFileJob::finishedSignal, this, &PropagateDownloadFile::slotGetFinished);
     connect(qobject_cast<GETFileJob *>(_job.data()), &GETFileJob::downloadProgress,

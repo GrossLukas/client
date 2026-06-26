@@ -86,6 +86,10 @@ const QString pauseSyncWhenMeteredC()
 const QString moveToTrashC() { return QStringLiteral("moveToTrash"); }
 const QString showMainDialogOnStartupC() { return QStringLiteral("showMainDialogOnStartup"); }
 const QString enableHttp2C() { return QStringLiteral("enableHttp2"); }
+const QString useUploadLimitC() { return QStringLiteral("useUploadLimit"); }
+const QString uploadLimitC() { return QStringLiteral("uploadLimit"); }
+const QString useDownloadLimitC() { return QStringLiteral("useDownloadLimit"); }
+const QString downloadLimitC() { return QStringLiteral("downloadLimit"); }
 
 const QString issuesWidgetFilterC()
 {
@@ -527,6 +531,48 @@ bool ConfigFile::enableHttp2() const
 void ConfigFile::setEnableHttp2(bool enabled)
 {
     setValue(enableHttp2C(), enabled);
+}
+
+// Bandwidth limits. "use*Limit": 0 = no limit, 1 = absolute limit. The "*Limit"
+// values are in kB/s. Off (0) by default, so transfers are unthrottled.
+int ConfigFile::useUploadLimit() const
+{
+    return getValue(useUploadLimitC(), QString(), 0).toInt();
+}
+
+void ConfigFile::setUseUploadLimit(int val)
+{
+    setValue(useUploadLimitC(), val);
+}
+
+int ConfigFile::useDownloadLimit() const
+{
+    return getValue(useDownloadLimitC(), QString(), 0).toInt();
+}
+
+void ConfigFile::setUseDownloadLimit(int val)
+{
+    setValue(useDownloadLimitC(), val);
+}
+
+qint64 ConfigFile::uploadLimit() const
+{
+    return getValue(uploadLimitC(), QString(), 0).toLongLong();
+}
+
+void ConfigFile::setUploadLimit(qint64 kbytesPerSecond)
+{
+    setValue(uploadLimitC(), kbytesPerSecond);
+}
+
+qint64 ConfigFile::downloadLimit() const
+{
+    return getValue(downloadLimitC(), QString(), 0).toLongLong();
+}
+
+void ConfigFile::setDownloadLimit(qint64 kbytesPerSecond)
+{
+    setValue(downloadLimitC(), kbytesPerSecond);
 }
 
 bool ConfigFile::promptDeleteFiles() const

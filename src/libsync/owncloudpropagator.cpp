@@ -25,7 +25,9 @@
 #include "propagateremotedelete.h"
 #include "propagateremotemkdir.h"
 #include "propagateremotemove.h"
+#include "bandwidthmanager.h"
 #include "bulkpropagatorjob.h"
+#include "configfile.h"
 #include "propagateuploadfile.h"
 #include "propagateuploadng.h"
 #include "propagateuploadtus.h"
@@ -416,6 +418,22 @@ void OwncloudPropagator::start(SyncFileItemSet &&items)
     // its child items.
 
     _rootJob.reset(new PropagateRootDirectory(this));
+
+    // owncloud.online: set up bandwidth throttling when an up/down limit is
+    // configured. The manager stays null (and transfers are unaffected) when no
+    // limit is set. Limits are stored in kB/s and passed as bytes/s.
+    {
+        const ConfigFile cfg;
+        const qint64 uploadLimit = cfg.useUploadLimit() == 1 ? cfg.uploadLimit() * 1024LL : 0;
+        const qint64 downloadLimit = cfg.useDownloadLimit() == 1 ? cfg.downloadLimit() * 1024LL : 0;
+        if ((uploadLimit != 0 || downloadLimit != 0) && !_bandwidthManager) {
+            _bandwidthManager = new BandwidthManager(this);
+        }
+        if (_bandwidthManager) {
+            _bandwidthManager->setCurrentUploadLimit(uploadLimit);
+            _bandwidthManager->setCurrentDownloadLimit(downloadLimit);
+        }
+    }
 
     // The algorithm could be done recursively, but the implementation is done iteratively in order
     // to prevent us running out of stack space. So the next 3 variables are used to maintain the

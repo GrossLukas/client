@@ -13,6 +13,7 @@
  */
 
 #include "account.h"
+#include "bandwidthmanager.h"
 #include "filesystem.h"
 #include "propagateuploadfile.h"
 #include "syncengine.h"
@@ -31,12 +32,23 @@ using namespace std::chrono_literals;
 
 namespace OCC {
 
-UploadDevice::UploadDevice(const QString &fileName, qint64 start, qint64 size)
+UploadDevice::UploadDevice(const QString &fileName, qint64 start, qint64 size, BandwidthManager *bwm)
     : _file(fileName)
     , _start(start)
     , _size(size)
     , _read(0)
+    , _bandwidthManager(bwm)
 {
+    if (_bandwidthManager) {
+        _bandwidthManager->registerUploadDevice(this);
+    }
+}
+
+UploadDevice::~UploadDevice()
+{
+    if (_bandwidthManager) {
+        _bandwidthManager->unregisterUploadDevice(this);
+    }
 }
 
 bool UploadDevice::open(QIODevice::OpenMode mode)
@@ -75,11 +87,26 @@ qint64 UploadDevice::writeData(const char *, qint64)
 qint64 UploadDevice::readData(char *data, qint64 maxLen)
 {
     if (_size - _read <= 0) {
+        // at end
+        if (_bandwidthManager) {
+            _bandwidthManager->unregisterUploadDevice(this);
+        }
         return -1;
     }
     maxLen = qMin(maxLen, _size - _read);
     if (maxLen <= 0) {
         return 0;
+    }
+    if (isChoked()) {
+        // upload is paused; return 0 so QNAM waits and asks again on readyRead()
+        return 0;
+    }
+    if (isBandwidthLimited()) {
+        maxLen = qMin(maxLen, _bandwidthQuota);
+        if (maxLen <= 0) { // no quota left for this interval
+            return 0;
+        }
+        _bandwidthQuota -= maxLen;
     }
 
     auto c = _file.read(data, maxLen);
@@ -89,6 +116,39 @@ qint64 UploadDevice::readData(char *data, qint64 maxLen)
     }
     _read += c;
     return c;
+}
+
+void UploadDevice::setBandwidthLimited(bool b)
+{
+    if (_bandwidthLimited != b) {
+        _bandwidthLimited = b;
+        QMetaObject::invokeMethod(this, &UploadDevice::readyRead, Qt::QueuedConnection);
+    }
+}
+
+void UploadDevice::setChoked(bool b)
+{
+    _choked = b;
+    if (!_choked) {
+        QMetaObject::invokeMethod(this, &UploadDevice::readyRead, Qt::QueuedConnection);
+    }
+}
+
+void UploadDevice::giveBandwidthQuota(qint64 bwq)
+{
+    if (!atEnd()) {
+        _bandwidthQuota = bwq;
+        QMetaObject::invokeMethod(this, &UploadDevice::readyRead, Qt::QueuedConnection); // tell QNAM that we have quota
+    }
+}
+
+void UploadDevice::slotJobUploadProgress(qint64 sent, qint64 t)
+{
+    if (sent == 0 || t == 0) {
+        return;
+    }
+    // used by the BandwidthManager for relative limiting
+    _readWithProgress = sent;
 }
 
 bool UploadDevice::atEnd() const

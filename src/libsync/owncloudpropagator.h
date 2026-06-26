@@ -46,6 +46,7 @@ qint64 freeSpaceLimit();
 class SyncJournalDb;
 class OwncloudPropagator;
 class PropagatorCompositeJob;
+class BandwidthManager;
 
 /**
  * @brief the base class of propagator jobs
@@ -394,6 +395,11 @@ public:
         Jobs can be several time on the list (example, when several chunks are uploaded in parallel)
      */
     QList<PropagateItemJob *> _activeJobList;
+
+    /** Throttles upload/download speed when a bandwidth limit is configured.
+        Created lazily in start() only when a limit is set, so it stays null (and
+        transfers are unaffected) otherwise. */
+    QPointer<BandwidthManager> _bandwidthManager;
 
     /** We detected that another sync is required after this one */
     bool _anotherSyncNeeded;
