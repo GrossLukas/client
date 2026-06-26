@@ -228,7 +228,7 @@ void PropagateUploadFileNG::slotPropfindFinished()
         return;
     }
 
-    startNextChunk();
+    scheduleChunks();
 }
 
 void PropagateUploadFileNG::slotPropfindFinishedWithError()
@@ -281,7 +281,7 @@ void PropagateUploadFileNG::slotDeleteJobFinished()
             // There was an error removing some files, just start over
             startNewUpload();
         } else {
-            startNextChunk();
+            scheduleChunks();
         }
     }
 }
@@ -325,7 +325,7 @@ void PropagateUploadFileNG::slotMkColFinished()
         return;
     }
 
-    startNextChunk();
+    scheduleChunks();
 }
 
 void PropagateUploadFileNG::doFinalMove()
@@ -364,38 +364,54 @@ void PropagateUploadFileNG::doFinalMove()
     return;
 }
 
-void PropagateUploadFileNG::startNextChunk()
+void PropagateUploadFileNG::scheduleChunks()
 {
     if (propagator()->_abortRequested)
         return;
 
     OC_ENFORCE_X(_bytesToUpload >= _sent, "Sent data exceeds file size");
 
-    // All ranges complete!
-    if (_rangesToUpload.isEmpty()) {
+    // Top up the pipeline: keep up to _maxParallelChunks chunk PUTs in flight.
+    // Each chunk is an independent PUT to its own offset path, so the server
+    // accepts them concurrently; the final MOVE assembles them once all are done.
+    while (_inFlightChunks.size() < _maxParallelChunks && !_rangesToUpload.isEmpty()) {
+        auto &range = _rangesToUpload.first();
+        const qint64 offset = range.start;
+        const qint64 size = qMin(propagator()->_chunkSize, range.size);
+
+        // Carve the chunk off the front of the range now (at dispatch time) so the
+        // same bytes are never dispatched twice while this PUT is still in flight.
+        range.start += size;
+        range.size -= size;
+        if (range.size <= 0) {
+            _rangesToUpload.removeFirst();
+        }
+
+        const QString fileName = propagator()->fullLocalPath(_item->_file);
+        auto device = std::make_unique<UploadDevice>(fileName, offset, size);
+        if (!device->open(QIODevice::ReadOnly)) {
+            qCWarning(lcPropagateUploadNG) << "Could not prepare upload device: " << device->errorString();
+            // Soft error because this is likely caused by the user modifying his files while syncing
+            abortWithError(SyncFileItem::SoftError, device->errorString());
+            return;
+        }
+
+        // job takes ownership of device via a std::unique_ptr. Job deletes itself when finishing
+        PUTFileJob *job = new PUTFileJob(propagator()->account(), propagator()->account()->url(), chunkPath(offset), std::move(device), {}, this);
+        addChildJob(job);
+        _inFlightChunks.insert(job, size);
+        connect(job, &PUTFileJob::finishedSignal, this, &PropagateUploadFileNG::slotPutFinished);
+        connect(job, &PUTFileJob::uploadProgress, this, &PropagateUploadFileNG::slotUploadProgress);
+        job->start();
+        // Each in-flight chunk counts as one active transfer (a single job can be
+        // on the active list several times when uploading chunks in parallel).
+        propagator()->_activeJobList.append(this);
+    }
+
+    // Everything uploaded? Finish with the assembling MOVE.
+    if (_inFlightChunks.isEmpty() && _rangesToUpload.isEmpty()) {
         doFinalMove();
-        return;
     }
-
-    _currentChunkOffset = _rangesToUpload.first().start;
-    _currentChunkSize = qMin(propagator()->_chunkSize, _rangesToUpload.first().size);
-
-    const QString fileName = propagator()->fullLocalPath(_item->_file);
-    auto device = std::make_unique<UploadDevice>(fileName, _currentChunkOffset, _currentChunkSize);
-    if (!device->open(QIODevice::ReadOnly)) {
-        qCWarning(lcPropagateUploadNG) << "Could not prepare upload device: " << device->errorString();
-        // Soft error because this is likely caused by the user modifying his files while syncing
-        abortWithError(SyncFileItem::SoftError, device->errorString());
-        return;
-    }
-
-    // job takes ownership of device via a std::unique_ptr. Job deletes itself when finishing
-    PUTFileJob *job = new PUTFileJob(propagator()->account(), propagator()->account()->url(), chunkPath(_currentChunkOffset), std::move(device), {}, this);
-    addChildJob(job);
-    connect(job, &PUTFileJob::finishedSignal, this, &PropagateUploadFileNG::slotPutFinished);
-    connect(job, &PUTFileJob::uploadProgress, this, &PropagateUploadFileNG::slotUploadProgress);
-    job->start();
-    propagator()->_activeJobList.append(this);
 }
 
 void PropagateUploadFileNG::slotPutFinished()
@@ -408,9 +424,11 @@ void PropagateUploadFileNG::slotPutFinished()
     _item->_requestId = job->requestId();
 
     propagator()->_activeJobList.removeOne(this);
+    const qint64 chunkSize = _inFlightChunks.take(job);
 
     if (_finished) {
-        // We have sent the finished signal already. We don't need to handle any remaining jobs
+        // The upload already finished (the assembling MOVE was started or an error
+        // ended the transfer). Ignore the results of any other in-flight chunks.
         return;
     }
 
@@ -421,47 +439,37 @@ void PropagateUploadFileNG::slotPutFinished()
         return;
     }
 
-    // Mark the range as uploaded
-    markRangeAsDone(_currentChunkOffset, _currentChunkSize);
-    _sent += _currentChunkSize;
-
+    _sent += chunkSize;
     OC_ENFORCE_X(_sent <= _bytesToUpload, "can't send more than size");
+    propagator()->reportProgress(*_item, _sent);
 
-    // Adjust the chunk size for the time taken.
-    //
-    // Dynamic chunk sizing is enabled if the server configured a
-    // target duration for each chunk upload.
+    // Adjust the chunk size for the time taken. Only meaningful when chunks are
+    // uploaded one at a time; with parallel chunks the per-chunk wall-clock time
+    // includes contention from the other chunks and would skew the heuristic.
     auto targetDuration = propagator()->syncOptions()._targetChunkUploadDuration;
-    if (targetDuration.count() > 0) {
+    if (_maxParallelChunks <= 1 && targetDuration.count() > 0) {
         auto uploadTime = ++job->msSinceStart(); // add one to avoid div-by-zero
-        qint64 predictedGoodSize = (_currentChunkSize * targetDuration) / uploadTime;
+        qint64 predictedGoodSize = (chunkSize * targetDuration) / uploadTime;
 
-        // The whole targeting is heuristic. The predictedGoodSize will fluctuate
-        // quite a bit because of external factors (like available bandwidth)
-        // and internal factors (like number of parallel uploads).
-        //
-        // We use an exponential moving average here as a cheap way of smoothing
-        // the chunk sizes a bit.
+        // Exponential moving average to smooth the chunk sizes a bit.
         qint64 targetSize = propagator()->_chunkSize / 2 + predictedGoodSize / 2;
-
-        // Adjust the dynamic chunk size _chunkSize used for sizing of the item's chunks to be sent
         propagator()->_chunkSize = qBound(
             propagator()->syncOptions()._minChunkSize,
             targetSize,
             propagator()->syncOptions()._maxChunkSize);
 
-        qCInfo(lcPropagateUploadNG) << "Chunked upload of" << _currentChunkSize << "bytes took" << uploadTime.count()
+        qCInfo(lcPropagateUploadNG) << "Chunked upload of" << chunkSize << "bytes took" << uploadTime.count()
                                   << "ms, desired is" << targetDuration.count() << "ms, expected good chunk size is"
                                   << predictedGoodSize << "bytes and nudged next chunk size to "
                                   << propagator()->_chunkSize << "bytes";
     }
 
-    _finished = _sent == _bytesToUpload;
+    const bool allChunksDone = _rangesToUpload.isEmpty() && _inFlightChunks.isEmpty();
 
     // Check if the file still exists
     const QString fullFilePath(propagator()->fullLocalPath(_item->_file));
     if (!FileSystem::fileExists(fullFilePath)) {
-        if (!_finished) {
+        if (!allChunksDone) {
             abortWithError(SyncFileItem::SoftError, tr("The local file was removed during sync."));
             return;
         } else {
@@ -472,13 +480,13 @@ void PropagateUploadFileNG::slotPutFinished()
     // Check whether the file changed since discovery.
     if (FileSystem::fileChanged(QFileInfo{fullFilePath}, _item->_size, _item->_modtime)) {
         propagator()->_anotherSyncNeeded = true;
-        if (!_finished) {
+        if (!allChunksDone) {
             abortWithError(SyncFileItem::Message, fileChangedMessage());
             return;
         }
     }
 
-    if (!_finished) {
+    if (!allChunksDone) {
         // Deletes an existing blacklist entry on successful chunk upload
         if (_item->_hasBlacklistEntry) {
             propagator()->_journal->wipeErrorBlacklistEntry(_item->_file);
@@ -491,7 +499,9 @@ void PropagateUploadFileNG::slotPutFinished()
         propagator()->_journal->setUploadInfo(_item->_file, uploadInfo);
         propagator()->_journal->commit(QStringLiteral("Upload info"));
     }
-    startNextChunk();
+
+    // Dispatch the next chunk(s), or start the assembling MOVE when all are done.
+    scheduleChunks();
 }
 
 void PropagateUploadFileNG::slotMoveJobFinished()
@@ -549,7 +559,13 @@ void PropagateUploadFileNG::slotUploadProgress(qint64 sent, qint64 total)
     if (sent == 0 && total == 0) {
         return;
     }
-    propagator()->reportProgress(*_item, _sent + sent);
+    // With several chunks in flight the partial bytes of one chunk can't be
+    // attributed to a single offset cleanly, so only report smooth intra-chunk
+    // progress when a single chunk is uploading; otherwise progress advances in
+    // chunk-sized steps from slotPutFinished (reportProgress(_sent)).
+    if (_inFlightChunks.size() <= 1) {
+        propagator()->reportProgress(*_item, _sent + sent);
+    }
 }
 
 void PropagateUploadFileNG::abort(PropagatorJob::AbortType abortType)
