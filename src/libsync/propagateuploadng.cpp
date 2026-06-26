@@ -19,6 +19,7 @@
 
 #include "propagateuploadng.h"
 #include "account.h"
+#include "bandwidthmanager.h"
 #include "common/asserts.h"
 #include "common/syncjournaldb.h"
 #include "filesystem.h"
@@ -388,7 +389,7 @@ void PropagateUploadFileNG::scheduleChunks()
         }
 
         const QString fileName = propagator()->fullLocalPath(_item->_file);
-        auto device = std::make_unique<UploadDevice>(fileName, offset, size);
+        auto device = std::make_unique<UploadDevice>(fileName, offset, size, propagator()->_bandwidthManager);
         if (!device->open(QIODevice::ReadOnly)) {
             qCWarning(lcPropagateUploadNG) << "Could not prepare upload device: " << device->errorString();
             // Soft error because this is likely caused by the user modifying his files while syncing

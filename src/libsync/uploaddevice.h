@@ -14,8 +14,11 @@
 #pragma once
 
 #include <QFile>
+#include <QPointer>
 
 namespace OCC {
+
+class BandwidthManager;
 
 /**
  * @brief The UploadDevice class
@@ -25,7 +28,8 @@ class UploadDevice : public QIODevice
 {
     Q_OBJECT
 public:
-    UploadDevice(const QString &fileName, qint64 start, qint64 size);
+    UploadDevice(const QString &fileName, qint64 start, qint64 size, BandwidthManager *bwm = nullptr);
+    ~UploadDevice() override;
 
     bool open(QIODevice::OpenMode mode) override;
     void close() override;
@@ -38,9 +42,17 @@ public:
     bool isSequential() const override;
     bool seek(qint64 pos) override;
 
-    Q_SIGNALS:
+    // Bandwidth limiting (driven by the BandwidthManager)
+    void setBandwidthLimited(bool);
+    bool isBandwidthLimited() { return _bandwidthLimited; }
+    void setChoked(bool);
+    bool isChoked() { return _choked; }
+    void giveBandwidthQuota(qint64 bwq);
 
-    private:
+public Q_SLOTS:
+    void slotJobUploadProgress(qint64 sent, qint64 t);
+
+private:
     /// The local file to read data from
     QFile _file;
 
@@ -50,5 +62,13 @@ public:
     qint64 _size = 0;
     /// Position between _start and _start+_size
     qint64 _read = 0;
+
+    // Bandwidth manager related
+    QPointer<BandwidthManager> _bandwidthManager;
+    qint64 _bandwidthQuota = 0;
+    qint64 _readWithProgress = 0;
+    bool _bandwidthLimited = false; // if _bandwidthQuota will be used
+    bool _choked = false; // if upload is paused (readData() will return 0)
+    friend class BandwidthManager;
 };
 }

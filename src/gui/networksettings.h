@@ -20,6 +20,9 @@
 #include <QWidget>
 
 
+class QCheckBox;
+class QSpinBox;
+
 namespace OCC {
 
 namespace Ui {
@@ -41,6 +44,7 @@ public:
 private Q_SLOTS:
     void saveProxySettings();
     void saveMeteredSettings();
+    void saveBWLimitSettings();
 
     /// Red marking of host field if empty and enabled
     void checkEmptyProxyHost();
@@ -54,9 +58,17 @@ private:
     void loadProxySettings();
     void removeBWLimitSettings();
     void loadMeteredSettings();
+    void setupBWLimitUi();
+    void loadBWLimitSettings();
     CredentialManager *_credentialManager;
 
     Ui::NetworkSettings *_ui;
+
+    // Bandwidth limit controls (built programmatically in setupBWLimitUi)
+    QCheckBox *_uploadLimitCheckBox = nullptr;
+    QSpinBox *_uploadLimitSpinBox = nullptr;
+    QCheckBox *_downloadLimitCheckBox = nullptr;
+    QSpinBox *_downloadLimitSpinBox = nullptr;
 };
 
 

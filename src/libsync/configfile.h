@@ -136,6 +136,17 @@ public:
     bool enableHttp2() const;
     void setEnableHttp2(bool enabled);
 
+    /** Bandwidth limits. use*Limit: 0 = unlimited, 1 = absolute limit.
+        *Limit values are in kB/s. Off by default. */
+    int useUploadLimit() const;
+    void setUseUploadLimit(int);
+    int useDownloadLimit() const;
+    void setUseDownloadLimit(int);
+    qint64 uploadLimit() const;
+    void setUploadLimit(qint64 kbytesPerSecond);
+    qint64 downloadLimit() const;
+    void setDownloadLimit(qint64 kbytesPerSecond);
+
     /// Used for testing, so we do not change the user's config file.
     static bool setConfDir(const QString &value);
 

@@ -14,6 +14,7 @@
 
 #include "propagateuploadtus.h"
 #include "account.h"
+#include "bandwidthmanager.h"
 #include "capabilities.h"
 #include "common/asserts.h"
 #include "common/checksums.h"
@@ -57,7 +58,7 @@ UploadDevice *PropagateUploadFileTUS::prepareDevice(const quint64 &chunkSize)
         abortWithError(SyncFileItem::SoftError, tr("%1 the file is currently in use").arg(localFileName));
         return nullptr;
     }
-    auto device = std::make_unique<UploadDevice>(localFileName, _currentOffset, chunkSize);
+    auto device = std::make_unique<UploadDevice>(localFileName, _currentOffset, chunkSize, propagator()->_bandwidthManager);
     if (!device->open(QIODevice::ReadOnly)) {
         qCWarning(lcPropagateUploadTUS) << "Could not prepare upload device: " << device->errorString();
 

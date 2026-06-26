@@ -25,6 +25,7 @@ set(libsync_SRCS
     progressdispatcher.cpp
     propagatorjobs.cpp
     propagatedownload.cpp
+    bandwidthmanager.cpp
     bulkpropagatorjob.cpp
     propagateuploadcommon.cpp
     propagateuploadfile.cpp

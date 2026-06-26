@@ -22,8 +22,13 @@
 #include "folderman.h"
 #include "theme.h"
 
+#include <QBoxLayout>
+#include <QCheckBox>
+#include <QGridLayout>
+#include <QGroupBox>
 #include <QList>
 #include <QNetworkProxy>
+#include <QSpinBox>
 #include <QString>
 #include <QtGui/QtEvents>
 
@@ -76,6 +81,8 @@ NetworkSettings::NetworkSettings(QWidget *parent)
     loadProxySettings();
     removeBWLimitSettings();
     loadMeteredSettings();
+    setupBWLimitUi();
+    loadBWLimitSettings();
 
     // proxy
     connect(_ui->typeComboBox, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), this, &NetworkSettings::saveProxySettings);
@@ -97,6 +104,69 @@ NetworkSettings::NetworkSettings(QWidget *parent)
 NetworkSettings::~NetworkSettings()
 {
     delete _ui;
+}
+
+void NetworkSettings::setupBWLimitUi()
+{
+    auto *group = new QGroupBox(tr("Bandwidth"), this);
+    auto *grid = new QGridLayout(group);
+
+    _uploadLimitCheckBox = new QCheckBox(tr("Limit upload speed to"), group);
+    _uploadLimitSpinBox = new QSpinBox(group);
+    _uploadLimitSpinBox->setRange(1, 100000);
+    _uploadLimitSpinBox->setSuffix(tr(" kB/s"));
+    _uploadLimitSpinBox->setValue(100);
+    grid->addWidget(_uploadLimitCheckBox, 0, 0);
+    grid->addWidget(_uploadLimitSpinBox, 0, 1);
+
+    _downloadLimitCheckBox = new QCheckBox(tr("Limit download speed to"), group);
+    _downloadLimitSpinBox = new QSpinBox(group);
+    _downloadLimitSpinBox->setRange(1, 100000);
+    _downloadLimitSpinBox->setSuffix(tr(" kB/s"));
+    _downloadLimitSpinBox->setValue(100);
+    grid->addWidget(_downloadLimitCheckBox, 1, 0);
+    grid->addWidget(_downloadLimitSpinBox, 1, 1);
+
+    grid->setColumnStretch(2, 1);
+
+    connect(_uploadLimitCheckBox, &QAbstractButton::toggled, _uploadLimitSpinBox, &QWidget::setEnabled);
+    connect(_downloadLimitCheckBox, &QAbstractButton::toggled, _downloadLimitSpinBox, &QWidget::setEnabled);
+    connect(_uploadLimitCheckBox, &QAbstractButton::toggled, this, &NetworkSettings::saveBWLimitSettings);
+    connect(_downloadLimitCheckBox, &QAbstractButton::toggled, this, &NetworkSettings::saveBWLimitSettings);
+    connect(_uploadLimitSpinBox, &QAbstractSpinBox::editingFinished, this, &NetworkSettings::saveBWLimitSettings);
+    connect(_downloadLimitSpinBox, &QAbstractSpinBox::editingFinished, this, &NetworkSettings::saveBWLimitSettings);
+
+    // Place the bandwidth group right below the metered checkbox.
+    if (auto *boxLayout = qobject_cast<QBoxLayout *>(layout())) {
+        boxLayout->insertWidget(1, group);
+    } else if (layout()) {
+        layout()->addWidget(group);
+    }
+}
+
+void NetworkSettings::loadBWLimitSettings()
+{
+    ConfigFile cfg;
+    _uploadLimitCheckBox->setChecked(cfg.useUploadLimit() == 1);
+    if (cfg.uploadLimit() > 0) {
+        _uploadLimitSpinBox->setValue(static_cast<int>(cfg.uploadLimit()));
+    }
+    _uploadLimitSpinBox->setEnabled(_uploadLimitCheckBox->isChecked());
+
+    _downloadLimitCheckBox->setChecked(cfg.useDownloadLimit() == 1);
+    if (cfg.downloadLimit() > 0) {
+        _downloadLimitSpinBox->setValue(static_cast<int>(cfg.downloadLimit()));
+    }
+    _downloadLimitSpinBox->setEnabled(_downloadLimitCheckBox->isChecked());
+}
+
+void NetworkSettings::saveBWLimitSettings()
+{
+    ConfigFile cfg;
+    cfg.setUseUploadLimit(_uploadLimitCheckBox->isChecked() ? 1 : 0);
+    cfg.setUploadLimit(_uploadLimitSpinBox->value());
+    cfg.setUseDownloadLimit(_downloadLimitCheckBox->isChecked() ? 1 : 0);
+    cfg.setDownloadLimit(_downloadLimitSpinBox->value());
 }
 
 
