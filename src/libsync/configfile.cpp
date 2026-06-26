@@ -518,7 +518,10 @@ void ConfigFile::setShowMainDialogOnStartup(bool isChecked)
 
 bool ConfigFile::enableHttp2() const
 {
-    return getValue(enableHttp2C(), QString(), false).toBool();
+    // On by default (opt-out): HTTP/2 multiplexes many requests over one
+    // connection, which speeds up syncing lots of small files. Users can still
+    // disable it if their server/proxy has HTTP/2 problems.
+    return getValue(enableHttp2C(), QString(), true).toBool();
 }
 
 void ConfigFile::setEnableHttp2(bool enabled)
