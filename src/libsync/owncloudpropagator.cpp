@@ -26,6 +26,7 @@
 #include "propagateremotemkdir.h"
 #include "propagateremotemove.h"
 #include "propagateuploadfile.h"
+#include "propagateuploadng.h"
 #include "propagateuploadtus.h"
 #include "propagatorjobs.h"
 #include "vio/csync_vio_local.h"
@@ -353,6 +354,15 @@ PropagateItemJob *OwncloudPropagator::createJob(const SyncFileItemPtr &item)
         }
         if (account()->capabilities().tusSupport().isValid()) {
             auto job = new PropagateUploadFileTUS(this, item);
+            job->setDeleteExisting(deleteExisting);
+            return job;
+        }
+        // owncloud.online: servers based on ownCloud 10 advertise dav.chunking but
+        // no TUS. Use the resumable NG chunked upload for files above the chunk
+        // threshold so large uploads aren't a single PUT (PHP/web-server limits,
+        // no resume). Small files keep using a plain PUT.
+        if (item->_size > syncOptions()._initialChunkSize && account()->capabilities().chunkingNg()) {
+            auto job = new PropagateUploadFileNG(this, item);
             job->setDeleteExisting(deleteExisting);
             return job;
         }

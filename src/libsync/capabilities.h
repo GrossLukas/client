@@ -174,6 +174,14 @@ public:
     /// returns true if the capabilities report notifications
     bool notificationsAvailable() const;
 
+    /// Whether the server supports the ownCloud 10 "new" chunked upload
+    /// algorithm (dav.chunking >= 1.0). Used for large-file uploads when the
+    /// server does not advertise TUS. Honours OWNCLOUD_CHUNKING_NG override.
+    bool chunkingNg() const;
+
+    /// Whether chunked uploads are enabled at all (files/bigfilechunking).
+    bool bigfilechunkingEnabled() const;
+
     /// returns true if the capabilities are loaded already.
     bool isValid() const;
 

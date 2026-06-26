@@ -161,6 +161,29 @@ QStringList Capabilities::blacklistedFiles() const
     return _capabilities.value(QStringLiteral("files")).toMap().value(QStringLiteral("blacklisted_files")).toStringList();
 }
 
+bool Capabilities::chunkingNg() const
+{
+    if (!bigfilechunkingEnabled()) {
+        return false;
+    }
+    static const auto chunkng = qgetenv("OWNCLOUD_CHUNKING_NG");
+    if (chunkng == "0")
+        return false;
+    if (chunkng == "1")
+        return true;
+    return _capabilities.value(QStringLiteral("dav")).toMap().value(QStringLiteral("chunking")).toFloat() >= 1.0;
+}
+
+bool Capabilities::bigfilechunkingEnabled() const
+{
+    bool ok = false;
+    const int chunkSize = qEnvironmentVariableIntValue("OWNCLOUD_CHUNK_SIZE", &ok);
+    if (ok && chunkSize == 0) {
+        return false;
+    }
+    return _capabilities.value(QStringLiteral("files")).toMap().value(QStringLiteral("bigfilechunking"), true).toBool();
+}
+
 Status::Status(const QVariantMap &status)
 {
     legacyVersion = QVersionNumber::fromString(status.value(QStringLiteral("version")).toString());
