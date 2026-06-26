@@ -27,6 +27,7 @@ set(libsync_SRCS
     propagatedownload.cpp
     propagateuploadcommon.cpp
     propagateuploadfile.cpp
+    propagateuploadng.cpp
     propagateuploadtus.cpp
     propagateremotedelete.cpp
     propagateremotemove.cpp
