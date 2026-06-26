@@ -82,7 +82,12 @@ int OwncloudPropagator::maximumActiveTransferJob()
         // disable parallelism when there is a network limit.
         return 1;
     }
-    return qMin(3, qCeil(_syncOptions._parallelNetworkJobs / 2.));
+    // Allow more bandwidth-heavy transfers in parallel than the historical hard cap
+    // of 3, which throttled multi-file / high-latency syncs. hardMaximumActiveJob()
+    // (and thus the total connection count) is intentionally left untouched, so this
+    // only reallocates the existing _parallelNetworkJobs budget toward transfers
+    // instead of opening additional connections to the server.
+    return qMin(6, qCeil(_syncOptions._parallelNetworkJobs * 3 / 4.));
 }
 
 /* The maximum number of active jobs in parallel  */
