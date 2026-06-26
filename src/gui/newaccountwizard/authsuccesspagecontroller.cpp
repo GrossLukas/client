@@ -44,7 +44,7 @@ void AuthSuccessPageController::buildPage()
     logoLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     logoLabel->setAccessibleName(tr("Application Name Logo %1").arg(appName));
 
-    QLabel *instructionLabel = new QLabel(tr("You're all set! Open %1 and get started.").arg(appName), _page);
+    QLabel *instructionLabel = new QLabel(tr("You are almost set! The synchronization options are under Advanced. By default the client enables the Virtual File System (VFS) and only downloads files when you open them."), _page);
     QFont font = instructionLabel->font();
     font.setPixelSize(20);
     font.setWeight(QFont::DemiBold);
