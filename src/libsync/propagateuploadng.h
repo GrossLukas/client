@@ -22,11 +22,14 @@
 #include "propagateuploadfile.h"
 #include "uploaddevice.h"
 
+#include <QHash>
 #include <QMap>
 #include <QVector>
 
 namespace OCC {
 Q_DECLARE_LOGGING_CATEGORY(lcPropagateUploadNG)
+
+class PUTFileJob;
 
 /**
  * @ingroup libsync
@@ -80,6 +83,16 @@ private:
     };
     QVector<UploadRangeInfo> _rangesToUpload;
 
+    /** Maximum number of chunk PUTs of the SAME file in flight at once.
+     * The server accepts independent chunk uploads to different offsets, so
+     * uploading them in parallel speeds up single large files on high-latency
+     * links. Kept modest to avoid opening too many connections per file. */
+    int _maxParallelChunks = 3;
+
+    /** Chunk PUTs currently in flight, mapping the job to the byte size of its
+     * chunk (used for progress/sent accounting once the chunk completes). */
+    QHash<PUTFileJob *, qint64> _inFlightChunks;
+
     /**
      * Return the path of a chunk.
      * If chunkOffset == -1, returns the URL of the parent folder containing the chunks
@@ -101,7 +114,7 @@ public:
 private:
     void doStartUploadNext();
     void startNewUpload();
-    void startNextChunk();
+    void scheduleChunks();
     void doFinalMove();
 public Q_SLOTS:
     void abort(PropagatorJob::AbortType abortType) override;
