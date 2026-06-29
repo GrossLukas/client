@@ -179,7 +179,21 @@ void BulkPropagatorJob::completeItem(const SyncFileItemPtr &item, SyncFileItem::
             propagator()->_journal->wipeErrorBlacklistEntry(item->_file);
             item->_hasBlacklistEntry = false;
         }
-        propagator()->reportProgress(*item, item->_size);
+
+        // Persist the sync journal record, exactly like PropagateUploadCommon::finalize()
+        // does via updateMetadata(). Without this the file is re-discovered as new on the
+        // next sync, which breaks no-op detection and delete propagation. The bulk response
+        // carries no permissions, so _remotePerm stays null and the next remote PROPFIND
+        // fills it in via a cheap metadata-only update.
+        const auto result = propagator()->updateMetadata(*item);
+        if (!result) {
+            item->_status = SyncFileItem::FatalError;
+            item->_errorString = tr("Error updating metadata: %1").arg(result.error());
+            propagator()->_anotherSyncNeeded = true;
+        } else {
+            propagator()->_journal->setUploadInfo(item->_file, SyncJournalDb::UploadInfo());
+            propagator()->reportProgress(*item, item->_size);
+        }
     } else {
         if (item->_errorString.isEmpty()) {
             item->_errorString = errorString;
