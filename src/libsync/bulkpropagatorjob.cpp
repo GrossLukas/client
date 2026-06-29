@@ -30,6 +30,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 
+#include <algorithm>
 #include <utility>
 
 namespace OCC {
@@ -157,8 +158,32 @@ void BulkPropagatorJob::slotUploadFinished()
         } else {
             const QString etag = Utility::normalizeEtag(entry.value(QStringLiteral("etag")).toString());
             const QByteArray fileId = entry.value(QStringLiteral("OC-FileID")).toVariant().toByteArray();
-            completeItem(item, SyncFileItem::Success, etag, fileId, {});
+            if (etag.isEmpty()) {
+                // A success entry without an etag would be written to the journal with an
+                // empty etag, making the next discovery re-download the just-uploaded file.
+                // Retry it on the next sync instead of recording an incomplete record.
+                propagator()->_anotherSyncNeeded = true;
+                completeItem(item, SyncFileItem::SoftError, {}, {}, tr("Server confirmed the upload without an etag"));
+            } else {
+                completeItem(item, SyncFileItem::Success, etag, fileId, {});
+            }
         }
+    }
+
+    // If completeItem() hit a FatalError (a journal write failure in updateMetadata),
+    // mirror PropagateItemJob::done(): a failing journal must hard-stop the whole sync,
+    // because items already marked done in memory are not persisted and could later be
+    // seen as deletions. A SoftError on the other hand only schedules another sync.
+    const bool anyFatal = std::any_of(_sentItems.cbegin(), _sentItems.cend(),
+        [](const SyncFileItemPtr &i) { return i->_status == SyncFileItem::FatalError; });
+    if (anyFatal) {
+        // Emit finished BEFORE aborting (like PropagateItemJob::done): propagator()->abort()
+        // cascades into this job's abort(), which sets the state to Finished and would make
+        // a subsequent finishJob() a no-op, swallowing the finished signal and hanging the
+        // parent composite job.
+        finishJob(SyncFileItem::FatalError);
+        propagator()->abort();
+        return;
     }
     finishJob(SyncFileItem::Success);
 }
