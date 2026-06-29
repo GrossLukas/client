@@ -37,6 +37,7 @@ endif()
 add_subdirectory(resources)
 add_subdirectory(csync)
 add_subdirectory(libsync)
+add_subdirectory(cmd)
 add_subdirectory(gui)
 
 if (WITH_CRASHREPORTER)
