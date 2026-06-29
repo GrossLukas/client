@@ -91,6 +91,11 @@ PropagateUploadFileNG::PropagateUploadFileNG(OwncloudPropagator *propagator, con
     : PropagateUploadCommon(propagator, item)
     , _bytesToUpload(item->_size)
 {
+    // On HTTP/2 extra concurrent chunk streams are cheap (one connection, many
+    // multiplexed streams), so push more chunks in parallel there.
+    if (propagator->account() && propagator->account()->isHttp2Supported()) {
+        _maxParallelChunks = 6;
+    }
 }
 void PropagateUploadFileNG::doStartUpload()
 {

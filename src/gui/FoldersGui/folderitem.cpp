@@ -91,6 +91,8 @@ void FolderItem::setProgress(const ProgressInfo &progress)
         }
     }
 
+    _estimatedEta = progress.totalProgress().estimatedEta;
+
     refresh();
 }
 
@@ -164,6 +166,9 @@ QString FolderItem::statusAsString() const
         if (_estimatedUpBw > 0) {
             QString formattedUpBw = Utility::octetsToString(_estimatedUpBw);
             progress.append(tr(", ⬆️ %1/s").arg(formattedUpBw));
+        }
+        if (_estimatedEta > 0) {
+            progress.append(tr(", %1 left").arg(Utility::durationToDescriptiveString1(std::chrono::milliseconds(_estimatedEta))));
         }
         progress.append(")");
         return progress;
