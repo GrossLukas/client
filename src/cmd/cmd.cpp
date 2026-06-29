@@ -112,9 +112,9 @@ int main(int argc, char **argv)
     auto *account = new Account(QUuid::createUuid(), user, serverUrl);
     account->setCredentials(new HttpBasicCredentials(account, user, password));
 
-    QTimer::singleShot(0, &app, [account, localDir, remotePath] {
+    QTimer::singleShot(0, &app, [account, localDir, remotePath, serverUrl, user, password] {
         auto *checkJob = CheckServerJobFactory::createFromAccount(account, false).startJob(account->url(), qApp);
-        QObject::connect(checkJob, &CoreJob::finished, qApp, [account, checkJob, localDir, remotePath] {
+        QObject::connect(checkJob, &CoreJob::finished, qApp, [account, checkJob, localDir, remotePath, serverUrl, user, password] {
             if (!checkJob->success()) {
                 qCritical() << "Could not reach the server:" << checkJob->errorMessage();
                 qApp->exit(EXIT_FAILURE);
@@ -122,7 +122,7 @@ int main(int argc, char **argv)
             }
 
             auto *capsJob = new JsonApiJob(account, QStringLiteral("ocs/v2.php/cloud/capabilities"), {}, {}, qApp);
-            QObject::connect(capsJob, &JsonApiJob::finishedSignal, qApp, [account, capsJob, localDir, remotePath] {
+            QObject::connect(capsJob, &JsonApiJob::finishedSignal, qApp, [account, capsJob, localDir, remotePath, serverUrl, user, password] {
                 if (capsJob->reply()->error() != QNetworkReply::NoError) {
                     qCritical() << "Failed to fetch capabilities:" << capsJob->reply()->errorString();
                     qApp->exit(EXIT_FAILURE);
@@ -135,10 +135,42 @@ int main(int argc, char **argv)
                                              .toObject()
                                              .value(QStringLiteral("capabilities"))
                                              .toObject();
-                account->setCapabilities({ account->url(), caps.toVariantMap() });
-                // davUser is the login user passed to the Account constructor, so no
-                // extra ocs/cloud/user round trip is needed here.
-                startSync(account, localDir, remotePath);
+                const QVariantMap capsMap = caps.toVariantMap();
+
+                // The login string passed to -u may be an email alias or differ in casing
+                // from the real user id. davUser drives the WebDAV path, so using the login
+                // verbatim would target the wrong path (empty collection / 404, silent
+                // no-op). Resolve the canonical id via ocs/cloud/user, like the GUI does.
+                auto *userJob = new JsonApiJob(account, QStringLiteral("ocs/v2.php/cloud/user"), {}, {}, qApp);
+                QObject::connect(userJob, &JsonApiJob::finishedSignal, qApp,
+                    [account, userJob, localDir, remotePath, serverUrl, user, password, capsMap] {
+                        QString davUser = user;
+                        if (userJob->reply()->error() == QNetworkReply::NoError) {
+                            const QString id = userJob->data()
+                                                   .value(QStringLiteral("ocs"))
+                                                   .toObject()
+                                                   .value(QStringLiteral("data"))
+                                                   .toObject()
+                                                   .value(QStringLiteral("id"))
+                                                   .toString();
+                            if (!id.isEmpty()) {
+                                davUser = id;
+                            }
+                        }
+
+                        Account *syncAccount = account;
+                        if (davUser != account->davUser()) {
+                            // davUser is only settable via the constructor; rebuild the
+                            // account with the canonical id while keeping the same Basic
+                            // credentials (which authenticate with the original login).
+                            qInfo() << "Using canonical WebDAV user id" << davUser << "(login was" << user << ")";
+                            syncAccount = new Account(QUuid::createUuid(), davUser, serverUrl, qApp);
+                            syncAccount->setCredentials(new HttpBasicCredentials(syncAccount, user, password));
+                        }
+                        syncAccount->setCapabilities({ syncAccount->url(), capsMap });
+                        startSync(syncAccount, localDir, remotePath);
+                    });
+                userJob->start();
             });
             capsJob->start();
         });
