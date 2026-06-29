@@ -316,7 +316,9 @@ void BandwidthManager::relativeDownloadMeasuringTimerExpired()
         gfj->giveBandwidthQuota(quotaPerJob);
         qCDebug(lcBandwidthManager) << "Gave" << quotaPerJob / 1024.0 << "kB to" << gfj;
     }
-    _relativeLimitCurrentMeasuredDevice = nullptr;
+    // This is the download measuring cycle: reset the measured *job*, not the upload
+    // device member (copy-paste slip from the upload path).
+    _relativeLimitCurrentMeasuredJob = nullptr;
 }
 
 void BandwidthManager::relativeDownloadDelayTimerExpired()
