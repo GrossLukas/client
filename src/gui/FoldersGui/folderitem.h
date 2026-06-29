@@ -55,6 +55,7 @@ private:
     quint64 _completedSize = 0;
     quint64 _estimatedUpBw = 0;
     quint64 _estimatedDownBw = 0;
+    quint64 _estimatedEta = 0; //!< estimated remaining time in ms
     int _percentComplete = 0;
 
     QString _statusString;
