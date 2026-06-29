@@ -957,9 +957,15 @@ bool PropagatorCompositeJob::scheduleSelfOrChild()
         for (auto it = _tasksToDo.begin();
              it != _tasksToDo.end() && bulkBatch.size() < BulkPropagatorJob::maxBulkBatchCount;) {
             const SyncFileItemPtr &item = *it;
+            // Only batch brand-new files. A CSYNC_INSTRUCTION_SYNC (overwrite of an
+            // existing remote file) must go through the single-PUT path so it can send
+            // the "If-Match: <etag>" precondition (propagateuploadcommon.cpp); the bulk
+            // endpoint has no per-file precondition, so batching an overwrite would
+            // silently clobber a concurrent server-side change instead of producing a
+            // conflict. New files never send If-Match, so bulk is safe for them.
             const bool eligible = item->_direction == SyncFileItem::Up
                 && item->_type == ItemTypeFile
-                && (item->instruction() == CSYNC_INSTRUCTION_NEW || item->instruction() == CSYNC_INSTRUCTION_SYNC)
+                && item->instruction() == CSYNC_INSTRUCTION_NEW
                 && item->_size > 0
                 && item->_size <= BulkPropagatorJob::maxBulkFileSize
                 && (bulkBatchSize + item->_size) <= BulkPropagatorJob::maxBulkBatchSize;
