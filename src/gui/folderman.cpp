@@ -345,7 +345,13 @@ void FolderMan::loadSpacesAndCreateFolders(AccountState *accountState, bool useV
             return;
         }
 
-        Utility::setupFavLink(localDir);
+        // Don't pin the sync-root container here: at this point only the root
+        // container exists, not the per-space sync folders. localDir is the
+        // container (e.g. ".../owncloud.online", and it may even be empty), so
+        // pinning it produced an empty/wrong Quick Access shortcut instead of one
+        // to the actual synced folder. Each space's real path
+        // (".../owncloud.online (2)" etc.) is pinned in addFolderFromScratch()
+        // below, once findGoodPathForNewSyncFolder() has computed it.
 
         for (auto *space : std::as_const(spaces)) {
             FolderDefinition folderDef(space->webDavUrl(), space->id(), space->displayName());
