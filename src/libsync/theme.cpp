@@ -501,7 +501,13 @@ bool Theme::showVirtualFilesOption() const
 
 bool Theme::forceVirtualFilesOption() const
 {
-    return false;
+    // owncloud.online: when the platform supports it (Windows Cloud Files API),
+    // force virtual files on for new connections so the sync folder is set up with
+    // VFS automatically and shows up in the Explorer navigation pane like OneDrive,
+    // without the user having to pick a sync mode. The new-account wizard gates this
+    // on actual CfApi availability (_forceVfs = _vfsIsAvailable && this), so on
+    // platforms/paths without CfApi it falls back to a plain sync as before.
+    return true;
 }
 
 bool Theme::connectionValidatorClearCookies() const
