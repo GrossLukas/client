@@ -65,6 +65,7 @@ private:
     QAction *_removeSync = nullptr;
     QAction *_chooseSync = nullptr;
     QAction *_enableVfs = nullptr;
+    QAction *_manageAvailability = nullptr;
 
     void onFolderChanged(OCC::Folder *folder);
 
@@ -75,5 +76,6 @@ private:
     void onRemoveSync();
     void onChooseSync();
     void onEnableVfs();
+    void onManageAvailability();
 };
 }

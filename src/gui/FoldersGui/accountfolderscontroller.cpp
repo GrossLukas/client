@@ -169,6 +169,14 @@ void AccountFoldersController::buildMenuActions()
             itemActions.push_back(_enableVfs);
             connect(_enableVfs, &QAction::triggered, this, &AccountFoldersController::onEnableVfs);
         }
+
+        // In-client availability management for VFS folders: browse the folder tree
+        // and set per-folder "always keep on this device" / "free up space (online
+        // only)" pin states, without leaving the client. Only enabled while VFS is on.
+        _manageAvailability = new QAction(tr("Manage availability"), this);
+        _manageAvailability->setObjectName("manageAvailabilityAction");
+        itemActions.push_back(_manageAvailability);
+        connect(_manageAvailability, &QAction::triggered, this, &AccountFoldersController::onManageAvailability);
     }
 
     if (_chooseSync) {
@@ -259,6 +267,9 @@ void AccountFoldersController::updateActions()
 
     if (_chooseSync)
         _chooseSync->setEnabled(_currentFolder && _currentFolder->isConnected() && _currentFolder->isAvailable() && !_currentFolder->virtualFilesEnabled());
+
+    if (_manageAvailability)
+        _manageAvailability->setEnabled(_currentFolder && _currentFolder->isConnected() && _currentFolder->isAvailable() && _currentFolder->virtualFilesEnabled());
 }
 
 void OCC::AccountFoldersController::onShowInSystemFolder()
@@ -382,6 +393,26 @@ void AccountFoldersController::onChooseSync()
         FolderMan::instance()->forceFolderSync(_currentFolder);
     });
 
+    emit requestAccountModalWidget(modalWidget);
+}
+
+void AccountFoldersController::onManageAvailability()
+{
+    if (!_currentFolder || !_accountState || !_accountState->account()) {
+        return;
+    }
+
+    // Reuses the selective-sync tree, but in VFS pin-state mode: the tree stays fully
+    // browsable and right-clicking a folder changes its availability (always keep on
+    // this device / free up space). Changes are applied immediately, so the modal only
+    // needs a Close button. The widget is reparented into the AccountModalWidget.
+    auto *availabilityTree = new SelectiveSyncWidget(_accountState->account(), nullptr);
+    availabilityTree->setDavUrl(_currentFolder->webDavUrl());
+    availabilityTree->setPinStateFolder(_currentFolder);
+    availabilityTree->setFolderInfo(_currentFolder->remotePath(), _currentFolder->displayName());
+
+    auto *modalWidget = new AccountModalWidget(tr("Manage availability"), availabilityTree, nullptr);
+    modalWidget->setStandardButtons(QDialogButtonBox::Close);
     emit requestAccountModalWidget(modalWidget);
 }
 }

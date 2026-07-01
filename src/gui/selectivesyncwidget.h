@@ -18,6 +18,7 @@
 #include <QUrl>
 #include <QWidget>
 
+#include "common/pinstate.h"
 #include "csync_exclude.h"
 
 class QTreeWidgetItem;
@@ -52,18 +53,34 @@ public:
 
     void setDavUrl(const QUrl &davUrl);
 
+    /** Switch the widget into VFS pin-state mode for the given folder.
+     *
+     * Instead of selective-sync checkboxes, the tree stays fully browsable and
+     * right-clicking a row lets the user change the availability of that folder
+     * (keep always on this device / free up space, i.e. online-only). This is the
+     * in-client equivalent of the Explorer/Finder "Always keep on this device" /
+     * "Free up space" context menu and works with any VFS backend.
+     */
+    void setPinStateFolder(Folder *folder);
+
 private Q_SLOTS:
     void slotUpdateDirectories(QStringList);
     void slotItemExpanded(QTreeWidgetItem *);
     void slotItemChanged(QTreeWidgetItem *, int);
+    void slotContextMenu(const QPoint &pos);
 
 private:
     void refreshFolders();
     void recursiveInsert(QTreeWidgetItem *parent, QStringList pathTrail, QString path, qint64 size, bool showChildIndicator);
     QUrl davUrl() const;
 
+    bool pinStateMode() const { return _pinStateFolder; }
+    void applyPinState(QTreeWidgetItem *item, PinState state);
+    void refreshAvailability(QTreeWidgetItem *item);
+
 private:
     QPointer<Account> _account;
+    QPointer<Folder> _pinStateFolder;
 
     QString _folderPath;
     QString _rootName;
@@ -73,6 +90,7 @@ private:
 
     bool _inserting; // set to true when we are inserting new items on the list
     QLabel *_loading;
+    QLabel *_header = nullptr;
 
     QTreeWidget *_folderTree;
 
