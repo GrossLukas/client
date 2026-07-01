@@ -13,6 +13,8 @@
  */
 #include "selectivesyncwidget.h"
 
+#include "common/vfs.h"
+#include "gui/folder.h"
 #include "gui/folderman.h"
 #include "libsync/configfile.h"
 #include "libsync/networkjobs.h"
@@ -22,12 +24,15 @@
 
 #include <QHeaderView>
 #include <QLabel>
+#include <QLoggingCategory>
+#include <QMenu>
 #include <QScopedValueRollback>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
 namespace OCC {
 
+Q_LOGGING_CATEGORY(lcSelectiveSync, "gui.selectivesync")
 
 class SelectiveSyncTreeViewItem : public QTreeWidgetItem
 {
@@ -71,10 +76,10 @@ SelectiveSyncWidget::SelectiveSyncWidget(Account *account, QWidget *parent)
     auto layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    auto header = new QLabel(this);
-    header->setText(tr("Deselect remote folders you do not wish to synchronize."));
-    header->setWordWrap(true);
-    layout->addWidget(header);
+    _header = new QLabel(this);
+    _header->setText(tr("Deselect remote folders you do not wish to synchronize."));
+    _header->setWordWrap(true);
+    layout->addWidget(_header);
 
     layout->addWidget(_folderTree);
 
@@ -173,26 +178,33 @@ void SelectiveSyncWidget::recursiveInsert(QTreeWidgetItem *parent, QStringList p
         parent->setToolTip(0, path);
         parent->setData(0, Qt::UserRole, path);
         parent->setChildIndicatorPolicy(showChildIndicator ? QTreeWidgetItem::ShowIndicator : QTreeWidgetItem::DontShowIndicator);
+        if (pinStateMode()) {
+            // The path (UserRole) is only known here, at the leaf of the insert, so
+            // this is the point where the availability column can be filled in.
+            refreshAvailability(parent);
+        }
     } else {
         SelectiveSyncTreeViewItem *item = static_cast<SelectiveSyncTreeViewItem *>(findFirstChild(parent, pathTrail.first()));
         if (!item) {
             item = new SelectiveSyncTreeViewItem(parent);
-            if (parent->checkState(0) == Qt::Checked || parent->checkState(0) == Qt::PartiallyChecked) {
-                item->setCheckState(0, Qt::Checked);
-                for (const auto &str : std::as_const(_oldBlackList)) {
-                    if (str == path || str == QLatin1Char('/')) {
-                        item->setCheckState(0, Qt::Unchecked);
-                        break;
-                    } else if (str.startsWith(path)) {
-                        item->setCheckState(0, Qt::PartiallyChecked);
+            if (!pinStateMode()) {
+                if (parent->checkState(0) == Qt::Checked || parent->checkState(0) == Qt::PartiallyChecked) {
+                    item->setCheckState(0, Qt::Checked);
+                    for (const auto &str : std::as_const(_oldBlackList)) {
+                        if (str == path || str == QLatin1Char('/')) {
+                            item->setCheckState(0, Qt::Unchecked);
+                            break;
+                        } else if (str.startsWith(path)) {
+                            item->setCheckState(0, Qt::PartiallyChecked);
+                        }
                     }
+                } else if (parent->checkState(0) == Qt::Unchecked) {
+                    item->setCheckState(0, Qt::Unchecked);
                 }
-            } else if (parent->checkState(0) == Qt::Unchecked) {
-                item->setCheckState(0, Qt::Unchecked);
             }
             item->setIcon(0, Resources::getCoreIcon(QStringLiteral("folder-sync")));
             item->setText(0, pathTrail.first());
-            if (size >= 0) {
+            if (!pinStateMode() && size >= 0) {
                 item->setText(1, Utility::octetsToString(size));
                 item->setData(1, Qt::UserRole, size);
             }
@@ -256,11 +268,15 @@ void SelectiveSyncWidget::slotUpdateDirectories(QStringList list)
         root->setText(0, _rootName);
         root->setIcon(0, Theme::instance()->applicationIcon());
         root->setData(0, Qt::UserRole, QString());
-        root->setCheckState(0, Qt::Checked);
-        qint64 size = job ? job->sizes().value(rootPath, -1) : -1;
-        if (size >= 0) {
-            root->setText(1, Utility::octetsToString(size));
-            root->setData(1, Qt::UserRole, size);
+        if (!pinStateMode()) {
+            root->setCheckState(0, Qt::Checked);
+            qint64 size = job ? job->sizes().value(rootPath, -1) : -1;
+            if (size >= 0) {
+                root->setText(1, Utility::octetsToString(size));
+                root->setData(1, Qt::UserRole, size);
+            }
+        } else {
+            refreshAvailability(root);
         }
     }
 
@@ -281,11 +297,13 @@ void SelectiveSyncWidget::slotUpdateDirectories(QStringList list)
     }
 
     // Root is partially checked if any children are not checked
-    for (int i = 0; i < root->childCount(); ++i) {
-        const auto child = root->child(i);
-        if (child->checkState(0) != Qt::Checked) {
-            root->setCheckState(0, Qt::PartiallyChecked);
-            break;
+    if (!pinStateMode()) {
+        for (int i = 0; i < root->childCount(); ++i) {
+            const auto child = root->child(i);
+            if (child->checkState(0) != Qt::Checked) {
+                root->setCheckState(0, Qt::PartiallyChecked);
+                break;
+            }
         }
     }
 
@@ -440,5 +458,71 @@ QUrl SelectiveSyncWidget::davUrl() const
 {
     Q_ASSERT(!_davUrl.isEmpty());
     return _davUrl;
+}
+
+void SelectiveSyncWidget::setPinStateFolder(Folder *folder)
+{
+    _pinStateFolder = folder;
+    if (_header) {
+        _header->setText(tr("Browse your files below. Right-click a folder to change its availability: "
+                            "keep it always on this device, or free up space by making it online only."));
+    }
+    // In pin-state mode column 1 shows the current availability instead of the size.
+    _folderTree->headerItem()->setText(1, tr("Availability"));
+    _folderTree->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(_folderTree, &QTreeWidget::customContextMenuRequested, this, &SelectiveSyncWidget::slotContextMenu, Qt::UniqueConnection);
+}
+
+void SelectiveSyncWidget::slotContextMenu(const QPoint &pos)
+{
+    if (!pinStateMode()) {
+        return;
+    }
+    auto *item = _folderTree->itemAt(pos);
+    if (!item) {
+        return;
+    }
+
+    QMenu menu(this);
+    auto *keepLocal = menu.addAction(tr("Always keep on this device"));
+    auto *freeUp = menu.addAction(tr("Free up space (online only)"));
+    menu.addSeparator();
+    auto *reset = menu.addAction(tr("Reset to default"));
+
+    auto *chosen = menu.exec(_folderTree->viewport()->mapToGlobal(pos));
+    if (chosen == keepLocal) {
+        applyPinState(item, PinState::AlwaysLocal);
+    } else if (chosen == freeUp) {
+        applyPinState(item, PinState::OnlineOnly);
+    } else if (chosen == reset) {
+        applyPinState(item, PinState::Inherited);
+    }
+}
+
+void SelectiveSyncWidget::applyPinState(QTreeWidgetItem *item, PinState state)
+{
+    if (!_pinStateFolder || !item) {
+        return;
+    }
+    const QString relPath = item->data(0, Qt::UserRole).toString();
+    if (!_pinStateFolder->vfs().setPinState(relPath, state)) {
+        qCWarning(lcSelectiveSync) << "Failed to set pin state" << static_cast<int>(state) << "for" << relPath;
+        return;
+    }
+    // Reflect the change on this row and any already-expanded descendants.
+    refreshAvailability(item);
+    for (int i = 0; i < item->childCount(); ++i) {
+        refreshAvailability(item->child(i));
+    }
+}
+
+void SelectiveSyncWidget::refreshAvailability(QTreeWidgetItem *item)
+{
+    if (!_pinStateFolder || !item) {
+        return;
+    }
+    const QString relPath = item->data(0, Qt::UserRole).toString();
+    const auto availability = _pinStateFolder->vfs().availability(relPath);
+    item->setText(1, availability ? Utility::enumToDisplayName(*availability) : QString());
 }
 }
