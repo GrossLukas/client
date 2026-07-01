@@ -501,13 +501,20 @@ bool Theme::showVirtualFilesOption() const
 
 bool Theme::forceVirtualFilesOption() const
 {
-    // owncloud.online: when the platform supports it (Windows Cloud Files API),
-    // force virtual files on for new connections so the sync folder is set up with
-    // VFS automatically and shows up in the Explorer navigation pane like OneDrive,
-    // without the user having to pick a sync mode. The new-account wizard gates this
-    // on actual CfApi availability (_forceVfs = _vfsIsAvailable && this), so on
-    // platforms/paths without CfApi it falls back to a plain sync as before.
-    return true;
+    // owncloud.online: VFS is still the *recommended default* on platforms that
+    // support it (Windows Cloud Files API, and soon the macOS File Provider), but it
+    // is no longer FORCED. Returning false here means:
+    //   * the new-account wizard's "Advanced settings" page shows all three sync
+    //     modes (Use virtual files / Download and sync all / Choose folders to sync),
+    //     with VFS pre-selected as the default when available,
+    //   * the folder context menu offers "Activate/Deactivate virtual files", so VFS
+    //     can be turned off again, and
+    //   * "Manage subfolder sync" (selective sync) is available once VFS is disabled.
+    // If this returned true, the wizard would hide the other two modes and the
+    // enable/disable-VFS action would never be created (see
+    // AdvancedSettingsPageController::buildPage and
+    // AccountFoldersController::buildFolderActions).
+    return false;
 }
 
 bool Theme::connectionValidatorClearCookies() const
