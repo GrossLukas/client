@@ -37,6 +37,7 @@
 #endif
 
 #include <QApplication>
+#include <QPalette>
 #include <QDesktopServices>
 #include <QFileOpenEvent>
 #include <QTimer>
@@ -62,6 +63,21 @@ Application::Application(Platform *platform, const QString &displayLanguage, boo
     , _displayLanguage(displayLanguage)
 {
     platform->migrate();
+
+    // owncloud.online branding: force the UI accent to the brand mint (#00E4BD) with a
+    // navy (#041e42) foreground, instead of inheriting the OS accent colour (which shows
+    // up e.g. as orange on this system). Only the accent roles are overridden, so the
+    // dark base of the theme stays intact.
+    {
+        const QColor brandMint(0x00, 0xE4, 0xBD);
+        const QColor brandNavy(0x04, 0x1E, 0x42);
+        QPalette pal = QApplication::palette();
+        pal.setColor(QPalette::Highlight, brandMint);
+        pal.setColor(QPalette::HighlightedText, brandNavy);
+        pal.setColor(QPalette::Accent, brandMint);
+        pal.setColor(QPalette::Link, brandMint);
+        QApplication::setPalette(pal);
+    }
 
     qCInfo(lcApplication) << "Plugin search paths:" << qApp->libraryPaths();
 
