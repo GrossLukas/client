@@ -1211,7 +1211,14 @@ Folder *FolderMan::addFolderFromScratch(AccountState *accountState, FolderDefini
         return nullptr;
     }
 
-    if (useVfs) {
+    // owncloud.online: honour the "force virtual files" theme policy on EVERY folder
+    // creation path (new account, reconnect, spaces, folder wizard), not just the
+    // new-account wizard's advanced page. Otherwise a reconnect could recreate the
+    // folder as a plain sync (useVfs == false), which is why no Cloud Files sync root
+    // (and thus no OneDrive-like Explorer entry) got registered.
+    const bool forceVfs = Theme::instance()->forceVirtualFilesOption()
+        && VfsPluginManager::instance().bestAvailableVfsMode() == Vfs::WindowsCfApi;
+    if (useVfs || forceVfs) {
         folderDefinition.setVirtualFilesMode(VfsPluginManager::instance().bestAvailableVfsMode());
     }
 
