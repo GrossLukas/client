@@ -609,7 +609,14 @@ void VfsWinPrivate::registerFolder(const VfsSetupParams &params)
     // A Uri to a cloud storage recycle bin.
     //providerInfo.RecycleBinUri(L"recycle bin");
 
-    providerInfo.ShowSiblingsAsGroup(true);
+    // owncloud.online: don't group sync roots as siblings. Grouping makes Windows
+    // insert a parent node in the navigation pane at the sync roots' common ancestor
+    // (typically the user profile, C:\Users\<name>), labelled with that folder's name
+    // (e.g. "l.gross") and carrying our icon. That node points at the profile, not the
+    // sync folder, so clicking it is useless and the real "owncloud.online" entry ends
+    // up nested underneath. With grouping off each sync root shows as its own top-level
+    // entry (named via DisplayNameResource, pointing at the sync folder) like OneDrive.
+    providerInfo.ShowSiblingsAsGroup(false);
 
     // Prepage the key from the shell property store we'll use to determine
     // availability.
