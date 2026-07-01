@@ -38,6 +38,7 @@
 #include <winerror.h>
 #include <ShObjIdl_core.h>
 #include <propsys.h>
+#include <shlobj_core.h> // SHChangeNotify
 
 #include "utility.h"
 #include "validationdevice.h"
@@ -66,6 +67,32 @@ std::wstring convertFullNativePathToFullyDecodedUrlW(const QString &path)
     //       some URLs is cannot be reliably represented as a fully-decoded string (see QUrl documentation). However,
     //       we already have a valid local path that is not encoded, we can use that directly.
     return QStringLiteral("file:///%1").arg(path).toStdWString();
+}
+
+// owncloud.online: after StorageProviderSyncRootManager::Register, Windows generates the
+// navigation-pane delegate CLSID and writes ShellFolder\FolderValueFlags = 0x228. The stray
+// 0x200 bit diverges from OneDrive (which uses 0x28) and, on some shells, leaves the nav-pane
+// entry non-navigable. StorageProviderSyncRootInfo exposes no property to control it, so we
+// normalise the generated value to 0x28 ourselves (HKCU write only, no elevation). Windows
+// re-emits 0x228 on every re-registration, so this must run after each Register().
+void normalizeNavPaneFolderValueFlags(const std::wstring &registrationId)
+{
+    const std::wstring srmKey =
+        L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\SyncRootManager\\" + registrationId;
+    wchar_t clsid[64] {};
+    DWORD cb = sizeof(clsid);
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, srmKey.c_str(), L"NamespaceCLSID", RRF_RT_REG_SZ, nullptr, clsid, &cb) != ERROR_SUCCESS) {
+        qWarning() << "normalizeNavPaneFolderValueFlags: no NamespaceCLSID for" << QString::fromStdWString(registrationId);
+        return;
+    }
+    const std::wstring sfKey = std::wstring(L"Software\\Classes\\CLSID\\") + clsid + L"\\ShellFolder";
+    HKEY h {};
+    if (RegOpenKeyExW(HKEY_CURRENT_USER, sfKey.c_str(), 0, KEY_SET_VALUE, &h) == ERROR_SUCCESS) {
+        DWORD flags = 0x28; // navigable raw-path delegate, matches OneDrive; drops the stray 0x200 bit
+        RegSetValueExW(h, L"FolderValueFlags", 0, REG_DWORD, reinterpret_cast<const BYTE *>(&flags), sizeof(flags));
+        RegCloseKey(h);
+        SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+    }
 }
 
 // Tell windows that the hydration needs to be restarted, possibly with a new size
@@ -702,6 +729,9 @@ void VfsWinPrivate::registerFolder(const VfsSetupParams &params)
         try {
             QMutexLocker registrationLock(&registrationMutex);
             StorageProviderSyncRootManager::Register(providerInfo);
+            // Normalise the ShellFolder\FolderValueFlags Windows just generated for the
+            // nav-pane delegate (0x228 -> 0x28), matching OneDrive. See helper above.
+            normalizeNavPaneFolderValueFlags(_registrationId);
         } catch (winrt::hresult_error const& ex) {
             qCWarning(lcVfs) << "Error registering StorageProvider for" << params.filesystemPath << QString::number(ex.code()) << hstringToQString(ex.message());
             Q_EMIT q->error(tr("Error registering StorageProvider for %1: %2 (0x%3)").arg(params.filesystemPath, hstringToQString(ex.message()), QString::number(ex.code(), 16)));
