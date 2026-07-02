@@ -64,6 +64,8 @@ bool BulkPropagatorJob::scheduleSelfOrChild()
     }
     _started = true;
     setState(Running);
+    // ins Transfer-Budget des Schedulers einbuchen (Gegenstueck in markDone())
+    propagator()->bulkJobStarted();
 
     const QByteArray boundary = QByteArrayLiteral("owncloud_online_bulk_boundary_marker");
     QByteArray body;
@@ -234,7 +236,20 @@ void BulkPropagatorJob::finishJob(SyncFileItem::Status status)
         return;
     }
     setState(Finished);
+    markDone();
     Q_EMIT finished(status);
+}
+
+void BulkPropagatorJob::markDone()
+{
+    // exakt einmal pro Running->Finished-Uebergang das Budget freigeben —
+    // sowohl finishJob() als auch abort() (das ohne finished()-Emission
+    // beendet) laufen hier durch
+    if (_countedDone || !_started) {
+        return;
+    }
+    _countedDone = true;
+    propagator()->bulkJobFinished();
 }
 
 void BulkPropagatorJob::abort(PropagatorJob::AbortType abortType)
@@ -242,6 +257,7 @@ void BulkPropagatorJob::abort(PropagatorJob::AbortType abortType)
     // Stop further handling first so a cancelled reply doesn't double-complete items.
     if (state() != Finished) {
         setState(Finished);
+        markDone();
     }
     if (_job && _job->reply()) {
         _job->reply()->abort();

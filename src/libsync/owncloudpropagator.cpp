@@ -117,7 +117,7 @@ bool PropagateItemJob::scheduleSelfOrChild()
     if (state() != NotYetStarted) {
         return false;
     }
-    qCInfo(lcPropagator) << "Starting propagation of" << _item << "by" << this;
+    qCDebug(lcPropagator) << "Starting propagation of" << _item << "by" << this;
 
     setState(Running);
     if (thread() != QApplication::instance()->thread()) {
@@ -301,7 +301,7 @@ void PropagateItemJob::done(SyncFileItem::Status statusArg, const QString &error
     if (_item->hasErrorStatus())
         qCWarning(lcPropagator) << "Could not complete propagation of" << _item->destination() << "by" << this << "with status" << _item->_status << "and error:" << _item->_errorString;
     else
-        qCInfo(lcPropagator) << "Completed propagation of" << _item->destination() << "by" << this << "with status" << _item->_status;
+        qCDebug(lcPropagator) << "Completed propagation of" << _item->destination() << "by" << this << "with status" << _item->_status;
 
     // Will be handled in PropagateDirectory::slotSubJobsFinished at the end
     if (!_item->isDirectory() || _item->_relevantDirectoyInstruction) {
@@ -707,11 +707,11 @@ void OwncloudPropagator::scheduleNextJobImpl()
 
     _jobScheduled = false;
 
-    if (_activeJobList.count() < maximumActiveTransferJob()) {
+    if (_activeJobList.count() + _activeBulkJobs < maximumActiveTransferJob()) {
         if (_rootJob->scheduleSelfOrChild()) {
             scheduleNextJob();
         }
-    } else if (_activeJobList.count() < hardMaximumActiveJob()) {
+    } else if (_activeJobList.count() + _activeBulkJobs < hardMaximumActiveJob()) {
         int likelyFinishedQuicklyCount = 0;
         // NOTE: Only counts the first 3 jobs! Then for each
         // one that is likely finished quickly, we can launch another one.
@@ -722,7 +722,7 @@ void OwncloudPropagator::scheduleNextJobImpl()
                 likelyFinishedQuicklyCount++;
             }
         }
-        if (_activeJobList.count() < maximumActiveTransferJob() + likelyFinishedQuicklyCount) {
+        if (_activeJobList.count() + _activeBulkJobs < maximumActiveTransferJob() + likelyFinishedQuicklyCount) {
             qCDebug(lcPropagator) << "Can pump in another request! activeJobs =" << _activeJobList.count();
             if (_rootJob->scheduleSelfOrChild()) {
                 scheduleNextJob();

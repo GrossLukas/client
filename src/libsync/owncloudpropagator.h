@@ -395,6 +395,10 @@ public:
         Jobs can be several time on the list (example, when several chunks are uploaded in parallel)
      */
     QList<PropagateItemJob *> _activeJobList;
+    // Bulk-Upload-Jobs sind keine PropagateItemJobs und tauchen nicht in
+    // _activeJobList auf; ohne eigenen Zaehler wuerde der Scheduler beliebig
+    // viele parallele Multipart-POSTs starten.
+    int _activeBulkJobs = 0;
 
     /** Throttles upload/download speed when a bandwidth limit is configured.
         Created lazily in start() only when a limit is set, so it stays null (and
@@ -464,6 +468,11 @@ public:
     PropagateItemJob *createJob(const SyncFileItemPtr &item);
 
     void scheduleNextJob();
+
+    /** Bulk-Upload-Budget: siehe _activeBulkJobs */
+    void bulkJobStarted() { _activeBulkJobs++; }
+    void bulkJobFinished() { if (_activeBulkJobs > 0) { _activeBulkJobs--; } scheduleNextJob(); }
+    int activeBulkJobs() const { return _activeBulkJobs; }
     void reportProgress(const SyncFileItem &, qint64 bytes);
     void reportFileTotal(const SyncFileItem &item, qint64 newSize);
 
