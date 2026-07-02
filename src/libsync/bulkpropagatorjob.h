@@ -53,6 +53,12 @@ public:
 
     bool scheduleSelfOrChild() override;
     JobParallelism parallelism() override { return FullParallelism; }
+
+private:
+    void markDone();
+    bool _countedDone = false;
+
+public:
     void abort(PropagatorJob::AbortType abortType) override;
 
 private Q_SLOTS:

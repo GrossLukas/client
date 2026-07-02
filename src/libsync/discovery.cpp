@@ -265,7 +265,7 @@ void ProcessDirectoryJob::processFile(const PathTuple &path,
     // The percent-encoded file name as it would be passed in an HTTP request. This can be used to
     // debug Unicode encoding/normalization issues.
     // clang-format off
-    qCInfo(lcDisco).nospace() << "Processing " << path._original
+    qCDebug(lcDisco).nospace() << "Processing " << path._original
                               << " | valid: " << dbEntry.isValid() << "/" << hasLocal << "/" << hasServer
                               << " | mtime: " << dbEntry._modtime << "/" << localEntry.modtime << "/" << serverEntry.modtime
                               << " | size: " << dbEntry._fileSize << "/" << localEntry.size << "/" << serverEntry.size
@@ -1063,7 +1063,7 @@ void ProcessDirectoryJob::processFileFinalize(
         item->_direction = _dirItem->_direction;
     }
 
-    qCInfo(lcDisco) << "Discovered" << item->_file << item->instruction() << item->_direction << item->_type;
+    qCDebug(lcDisco) << "Discovered" << item->_file << item->instruction() << item->_direction << item->_type;
 
     if (item->isDirectory() && item->instruction() == CSYNC_INSTRUCTION_SYNC)
         item->setInstruction(CSYNC_INSTRUCTION_UPDATE_METADATA);

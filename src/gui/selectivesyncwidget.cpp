@@ -225,6 +225,12 @@ void SelectiveSyncWidget::slotUpdateDirectories(QStringList list)
     auto job = qobject_cast<PropfindJob *>(sender());
     QScopedValueRollback<bool> isInserting(_inserting, true);
 
+    // Ein einziger Sortier-Lauf statt ensureSorted pro eingefuegtem Item:
+    // bei grossen Verzeichnissen ist der Einzel-Insert mit aktiver Sortierung
+    // O(n^2) auf dem UI-Thread (plus ein layoutChanged pro setText).
+    const bool wasSorting = _folderTree->isSortingEnabled();
+    _folderTree->setSortingEnabled(false);
+
     SelectiveSyncTreeViewItem *root = static_cast<SelectiveSyncTreeViewItem *>(_folderTree->topLevelItem(0));
 
     const QString rootPath = Utility::ensureTrailingSlash(Utility::concatUrlPath(davUrl(), _folderPath).path());
@@ -276,7 +282,10 @@ void SelectiveSyncWidget::slotUpdateDirectories(QStringList list)
                 root->setData(1, Qt::UserRole, size);
             }
         } else {
-            refreshAvailability(root);
+            // Die Wurzel wuerde einen kompletten Journal-Scan ausloesen
+            // (Pfad-Prefix ''), nur um eine Sammel-Verfuegbarkeit anzuzeigen —
+            // die Kinder tragen die eigentliche Information.
+            root->setText(1, QString());
         }
     }
 
@@ -305,6 +314,10 @@ void SelectiveSyncWidget::slotUpdateDirectories(QStringList list)
                 break;
             }
         }
+    }
+
+    if (wasSorting) {
+        _folderTree->setSortingEnabled(true);
     }
 
     root->setExpanded(true);
