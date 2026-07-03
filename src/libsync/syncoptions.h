@@ -51,6 +51,15 @@ public:
      */
     qint64 _initialChunkSize = 10 * 1000 * 1000; // 10MB
 
+    /** Size threshold (bytes) above which an upload uses the resumable chunked-NG
+     * path instead of a single PUT. Decoupled from _initialChunkSize (the chunk
+     * *size*): a file only needs one chunk yet still benefits from resume and from
+     * bypassing the server's single-request body limit. Kept equal to the client
+     * bulk-upload per-file ceiling (BulkPropagatorJob::maxBulkFileSize = 1 MiB) so
+     * there is no gap: new files <= 1 MiB batch via bulk, everything larger (and any
+     * overwrite > 1 MiB) chunks resumably, and nothing falls back to a bare PUT. */
+    qint64 _chunkUploadThreshold = 1 * 1024 * 1024; // 1 MiB, matches maxBulkFileSize
+
     /** The minimum chunk size in bytes for chunked uploads */
     qint64 _minChunkSize = 1 * 1000 * 1000; // 1MB
 

@@ -361,10 +361,12 @@ PropagateItemJob *OwncloudPropagator::createJob(const SyncFileItemPtr &item)
             return job;
         }
         // owncloud.online: servers based on ownCloud 10 advertise dav.chunking but
-        // no TUS. Use the resumable NG chunked upload for files above the chunk
-        // threshold so large uploads aren't a single PUT (PHP/web-server limits,
-        // no resume). Small files keep using a plain PUT.
-        if (item->_size > syncOptions()._initialChunkSize && account()->capabilities().chunkingNg()) {
+        // no TUS. Use the resumable NG chunked upload for files above the upload
+        // threshold so mid-size and large uploads aren't a single PUT (PHP/web-server
+        // body limits, no resume). The threshold is decoupled from the chunk *size*
+        // and set to the bulk per-file ceiling (1 MiB), so files that bulk can't take
+        // (> 1 MiB, or any overwrite) chunk resumably instead of falling back to PUT.
+        if (item->_size > syncOptions()._chunkUploadThreshold && account()->capabilities().chunkingNg()) {
             auto job = new PropagateUploadFileNG(this, item);
             job->setDeleteExisting(deleteExisting);
             return job;
