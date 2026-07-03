@@ -172,6 +172,13 @@ void BulkPropagatorJob::slotUploadFinished()
         }
     }
 
+    // Persist the journal records written by completeItem()->updateMetadata() now,
+    // mirroring PropagateUploadCommon::finalize()'s per-file commit. Otherwise the
+    // whole batch's records stay in the engine's long-running transaction and are
+    // rolled back on a crash/kill before the final "All Finished" commit — the
+    // just-uploaded files would then be re-discovered as new on the next sync.
+    propagator()->_journal->commit(QStringLiteral("bulk upload"));
+
     // If completeItem() hit a FatalError (a journal write failure in updateMetadata),
     // mirror PropagateItemJob::done(): a failing journal must hard-stop the whole sync,
     // because items already marked done in memory are not persisted and could later be

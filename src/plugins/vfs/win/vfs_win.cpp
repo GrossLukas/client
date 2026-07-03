@@ -772,6 +772,7 @@ void VfsWinPrivate::registerFolder(const VfsSetupParams &params)
             Q_EMIT q->error(tr("Unable to connect sync root: %1 error: %2").arg(syncRoot, Utility::formatWinError(ok)));
             return;
         }
+        _connected = true;
         // We have not discovered what the status ends up being used for
         //CfUpdateSyncProviderStatus(d->_connectionKey, CF_PROVIDER_STATUS_IDLE);
         if (addToSearchIndexerThread) {
@@ -844,7 +845,10 @@ void VfsWin::stop()
     }
 
     QMutexLocker registrationLock(&d->registrationMutex);
-    CfDisconnectSyncRoot(d->_connectionKey);
+    if (d->_connected) {
+        CfDisconnectSyncRoot(d->_connectionKey);
+        d->_connected = false;
+    }
 }
 
 void VfsWin::unregisterFolder()
@@ -901,7 +905,11 @@ OCC::Result<OCC::Vfs::ConvertToPlaceholderResult, QString> VfsWin::updateMetadat
                 if (!result) {
                     return OCC::Utility::formatWinError(result.error());
                 }
-                metadata.BasicInfo.FileAttributes = metadataOld.BasicInfo.FileAttributes & FILE_ATTRIBUTE_READONLY;
+                // OR the read-only bit onto the existing attributes. Masking with &
+                // would instead clear every other attribute and leave the file writable
+                // whenever it was not already read-only, so a read-only remote file was
+                // never actually made read-only locally.
+                metadata.BasicInfo.FileAttributes = metadataOld.BasicInfo.FileAttributes | FILE_ATTRIBUTE_READONLY;
             }
         }
     }
