@@ -26,6 +26,7 @@
 #include <QLabel>
 #include <QLoggingCategory>
 #include <QMenu>
+#include <QScopeGuard>
 #include <QScopedValueRollback>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -230,6 +231,14 @@ void SelectiveSyncWidget::slotUpdateDirectories(QStringList list)
     // O(n^2) auf dem UI-Thread (plus ein layoutChanged pro setText).
     const bool wasSorting = _folderTree->isSortingEnabled();
     _folderTree->setSortingEnabled(false);
+    // Restore sorting on EVERY exit path (there is an early return below when the
+    // server has no subfolders); a trailing conditional would leave the tree's
+    // sorting permanently disabled after that path.
+    auto restoreSorting = qScopeGuard([this, wasSorting] {
+        if (wasSorting) {
+            _folderTree->setSortingEnabled(true);
+        }
+    });
 
     SelectiveSyncTreeViewItem *root = static_cast<SelectiveSyncTreeViewItem *>(_folderTree->topLevelItem(0));
 
@@ -314,10 +323,6 @@ void SelectiveSyncWidget::slotUpdateDirectories(QStringList list)
                 break;
             }
         }
-    }
-
-    if (wasSorting) {
-        _folderTree->setSortingEnabled(true);
     }
 
     root->setExpanded(true);

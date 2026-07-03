@@ -88,7 +88,10 @@ public:
 
     VfsWin *q;
     QAtomicInt _registrationState;
-    CF_CONNECTION_KEY _connectionKey;
+    CF_CONNECTION_KEY _connectionKey{};
+    // Only true between a successful CfConnectSyncRoot and CfDisconnectSyncRoot, so
+    // stop() never disconnects an uninitialized key after a failed registration.
+    bool _connected = false;
     static QMutex registrationMutex;
 
     // System.StorageProviderState key
