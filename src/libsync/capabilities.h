@@ -111,6 +111,10 @@ struct OWNCLOUDSYNC_EXPORT FilesSharing
 
     // TODO: add more
     bool sharing_roles = false;
+    // Ob die Share-API serverseitig aktiv ist. Default true: fehlt der Key
+    // (aeltere/oc10-Server senden ihn evtl. nicht), gehen wir von aktivem
+    // Sharing aus, statt die "Teilen"-Aktion still zu verschlucken.
+    bool api_enabled = true;
 };
 
 /**

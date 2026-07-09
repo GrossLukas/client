@@ -34,34 +34,20 @@ namespace OCC {
 
 Q_LOGGING_CATEGORY(lcUpdater, "gui.updater", QtInfoMsg)
 
-[[deprecated("updateChannel is no longer supported. the key will be removed in 8.0")]]
-const QString updateChannelC() { return QStringLiteral("updateChannel"); }
-
 QString updateChannel()
 {
-    // remove deprecated updateChannel setting once we hit 8.0
-    auto settings = ConfigFile::makeQSettings();
-    QString updateChannelKey = updateChannelC();
-    // todo: #52
-    /*
-    if (settings.contains(updateChannelKey)) {
-        settings.remove(updateChannelKey);
-    }
-    */
-    // until then, migrate old setting if present
-    settings.setValue(updateChannelKey, "ocis");
-
-    // By now only two channels are supported: ocis and beta-ocis
+    // Kanalnamen sind branding-spezifisch. Der Upstream-Hardcode 'ocis'/'ocis-beta'
+    // passt nicht zum owncloud.online-oc10-Fork; hier werden generische Kanaele
+    // 'stable'/'beta' verwendet (der frueher bei jedem Aufruf ungefragt gesetzte
+    // deprecated Config-Key entfaellt). Vorabversionen -> Beta-Kanal, sonst stable.
     const QString suffix = OCC::Version::suffix();
-    if (suffix.startsWith(QLatin1String("daily"))
+    const bool preRelease = suffix.startsWith(QLatin1String("daily"))
         || suffix.startsWith(QLatin1String("nightly"))
         || suffix.startsWith(QLatin1String("alpha"))
         || suffix.startsWith(QLatin1String("rc"))
-        || suffix.startsWith(QLatin1String("beta"))) {
-        return "ocis-beta";
-        }
+        || suffix.startsWith(QLatin1String("beta"));
 
-    return "ocis";
+    return preRelease ? QStringLiteral("beta") : QStringLiteral("stable");
 }
 
 Updater *Updater::_instance = nullptr;

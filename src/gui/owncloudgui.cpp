@@ -416,11 +416,18 @@ void ownCloudGui::slotShowShareInBrowser(const QString &sharePath, const QString
         return;
     }
 
-    if (folder->accountState()->account()->capabilities().filesSharing().sharing_roles) {
+    // Frueher an capabilities().filesSharing().sharing_roles gekoppelt — dieser
+    // Top-Level-Key wird von oc10-Servern (owncloud.online) nie gesetzt, wodurch
+    // die "Teilen"-Aktion still nichts tat. Jetzt an api_enabled gekoppelt
+    // (Default true), sodass das Sharing-Panel geoeffnet wird, solange die
+    // Share-API nicht ausdruecklich deaktiviert ist.
+    if (folder->accountState()->account()->capabilities().filesSharing().api_enabled) {
         fetchPrivateLinkUrl(folder->accountState()->account(), folder->webDavUrl(), sharePath, this, [](const QUrl &url) {
             const auto queryUrl = Utility::concatUrlPath(url, QString(), {{QStringLiteral("details"), QStringLiteral("sharing")}});
             Utility::openBrowser(queryUrl, nullptr);
         });
+    } else {
+        qCWarning(lcApplication) << "Share API disabled on the server; cannot open share page for" << localPath;
     }
 }
 

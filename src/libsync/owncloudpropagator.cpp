@@ -355,7 +355,14 @@ PropagateItemJob *OwncloudPropagator::createJob(const SyncFileItemPtr &item)
             job->setDeleteExistingFolder(deleteExisting);
             return job;
         }
-        if (account()->capabilities().tusSupport().isValid()) {
+        // owncloud.online: oc10-Server bieten kein TUS an. TUS wird daher nur
+        // benutzt, wenn der Server es bewirbt UND es explizit per Env aktiviert
+        // ist. Ohne diese Haertung wuerde ein faelschlich eingeschleustes
+        // tus_support-Capability (Proxy/Fehlkonfiguration) den Client auf nicht
+        // vorhandene TUS-Endpoints leiten und Uploads brechen. Normalbetrieb
+        // unveraendert (tus_support erscheint bei uns ohnehin nie).
+        static const bool tusEnabled = qEnvironmentVariableIsSet("OWNCLOUD_ENABLE_TUS");
+        if (tusEnabled && account()->capabilities().tusSupport().isValid()) {
             auto job = new PropagateUploadFileTUS(this, item);
             job->setDeleteExisting(deleteExisting);
             return job;

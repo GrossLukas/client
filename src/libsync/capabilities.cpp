@@ -276,6 +276,7 @@ const FilesSharing &Capabilities::filesSharing() const
 
 FilesSharing::FilesSharing(const QVariantMap &filesSharing)
     : sharing_roles(filesSharing.value(QStringLiteral("sharing_roles"), false).toBool())
+    , api_enabled(filesSharing.value(QStringLiteral("api_enabled"), true).toBool())
 {
 }
 
