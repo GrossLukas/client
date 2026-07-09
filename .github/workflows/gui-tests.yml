@@ -14,6 +14,19 @@ env:
   S3_PUBLIC_CACHE_BUCKET: "public"
 
 jobs:
+  # Die Squish-GUI-Tests brauchen eine kommerzielle Squish-Lizenz
+  # (secrets.SQUISH_LICENSEKEY). Ist sie im Fork nicht hinterlegt, kann der
+  # gui-tests-Job nicht laufen und wuerde nur rot erzeugen. Dieser Gate-Job
+  # liest nur, OB das Secret gesetzt ist (nie den Wert), und ueberspringt die
+  # GUI-Tests sauber, wenn es fehlt.
+  check-secrets:
+    runs-on: ubuntu-latest
+    outputs:
+      hasSquishLicense: ${{ steps.check.outputs.hasSquishLicense }}
+    steps:
+      - id: check
+        run: echo "hasSquishLicense=${{ secrets.SQUISH_LICENSEKEY != '' }}" >> "$GITHUB_OUTPUT"
+
   lint-gui-test:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
@@ -40,6 +53,8 @@ jobs:
           make -C test/gui gherkin-lint
 
   gui-tests:
+    needs: check-secrets
+    if: needs.check-secrets.outputs.hasSquishLicense == 'true'
     runs-on: ubuntu-latest
     container:
       image: owncloudci/squish:fedora-42-8.1.0-qt68x-linux64
