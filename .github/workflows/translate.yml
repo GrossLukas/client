@@ -8,7 +8,21 @@ on:
 permissions: {}
 
 jobs:
+  # Transifex-Sync braucht secrets.TX_TOKEN. Fehlt es im Fork, kann der Job
+  # nicht laufen; dann sauber ueberspringen statt rot erzeugen. Dieser Gate-Job
+  # liest nur, OB das Secret gesetzt ist (nie den Wert).
+  check-secrets:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      hasTxToken: ${{ steps.check.outputs.hasTxToken }}
+    steps:
+      - id: check
+        run: echo "hasTxToken=${{ secrets.TX_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
   update-translations:
+    needs: check-secrets
+    if: needs.check-secrets.outputs.hasTxToken == 'true'
     permissions:
       contents: read
     strategy:
