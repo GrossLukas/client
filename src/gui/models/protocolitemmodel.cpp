@@ -200,17 +200,17 @@ void ProtocolItemModel::remove_if(const std::function<bool(const ProtocolItem &)
     // Der Filter laeuft bei jedem Sync-Start ueber das komplette Modell. Ein
     // Model-Reset re-sortiert/filtert beide Proxy-Models und verwirft Selektion
     // und Scrollposition — das lohnt nur, wenn wirklich etwas entfernt wird.
-    bool anyMatch = false;
-    for (size_t i = 0; i < _data.size(); ++i) {
-        if (filter(_data.at(i))) {
-            anyMatch = true;
-            break;
-        }
-    }
-    if (!anyMatch) {
+    //
+    // Wichtig: der Filter darf GENAU einmal pro Element ausgewertet werden
+    // (Praedikat-Vertrag; ein frueherer Vorab-Scan wertete ihn fuer Elemente bis
+    // zum ersten Treffer ein zweites Mal aus). Daher in eine Kopie filtern und
+    // nur bei echter Aenderung den teuren Reset ausloesen.
+    auto filtered = _data;
+    filtered.remove_if(filter);
+    if (filtered.size() == _data.size()) {
         return;
     }
     beginResetModel();
-    _data.remove_if(filter);
+    _data = std::move(filtered);
     endResetModel();
 }
