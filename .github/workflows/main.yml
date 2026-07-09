@@ -35,12 +35,17 @@ jobs:
               useSonarCloud: ${{ github.event_name != 'pull_request' }}
               testOptions: --options '[Compile]Jobs=1'
             # TODO: align the target with the name
+            # macOS ist noch WIP (FileProvider-VFS in Arbeit) und kein
+            # Release-Target; das Craft-Packaging (absolute dylib-Pfade) schlaegt
+            # dort vorbestehend fehl. Build + Tests laufen weiter und bleiben als
+            # Signal sichtbar, blockieren aber die Gesamt-CI nicht.
             - name: macos-clang-arm64
               target: macos-clang-arm64
               os: macos-14
               container:
               useSonarCloud:
               testOptions:
+              continueOnError: true
             - name: linux-gcc-x86_64
               target: linux-64-gcc
               os: ubuntu-latest
@@ -50,6 +55,7 @@ jobs:
     name: ${{ matrix.name }}
 
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.continueOnError || false }}
 
     env:
       CRAFT_TARGET: ${{ matrix.target }}

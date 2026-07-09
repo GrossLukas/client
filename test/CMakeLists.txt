@@ -76,6 +76,14 @@ if(WIN32)
         owncloud_add_test(WinVfs)
         target_link_libraries(WinVfsTest vfs_plugin_win_static)
         add_dependencies(WinVfsTest vfs_wincfapi)
+        # WinVfsTest braucht eine funktionsfaehige Cloud-Filter-Umgebung
+        # (Windows-Search-/cldflt-Dienst + registrierbarer Sync-Root). Headless
+        # CI-Runner haben die nicht, dort blockiert die CFAPI-Hydration bis zum
+        # ctest-Timeout. In CI daher weiter bauen (Compile-Check), aber nicht
+        # ausfuehren; auf echten Maschinen (kein CI-Env) laeuft der Test normal.
+        if (DEFINED ENV{CI})
+            set_tests_properties(WinVfsTest PROPERTIES DISABLED TRUE)
+        endif()
     else()
         message(WARNING "Failed to detect CldApi.dll: Skipping WinVfsTest")
     endif()
