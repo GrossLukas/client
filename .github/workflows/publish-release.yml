@@ -25,7 +25,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Download packages from CI run
-        run: gh run download "${{ inputs.run_id }}" -R "$GITHUB_REPOSITORY" -d packages
+        run: gh run download "${{ inputs.run_id }}" -R "$GITHUB_REPOSITORY" --dir packages
 
       - name: Prepare release assets
         run: |
