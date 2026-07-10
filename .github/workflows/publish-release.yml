@@ -1,0 +1,71 @@
+name: Publish Release
+
+# Publishes a GitHub release (creating the tag) from the packages a previous
+# "ownCloud CI" run built, so no rebuild is needed. Triggered manually.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create (e.g. v7.5.0)'
+        required: true
+        default: 'v7.5.0'
+      run_id:
+        description: 'ownCloud CI run id to take the packages from'
+        required: true
+        default: '29095326052'
+
+permissions:
+  contents: write # create the tag + release and upload assets
+  actions: read # download the CI run's artifacts
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download packages from CI run
+        run: gh run download "${{ inputs.run_id }}" -R "$GITHUB_REPOSITORY" -d packages
+
+      - name: Prepare release assets
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          VER="${TAG#v}"
+          mkdir -p assets
+          # flatten the artifacts, dropping craft bookkeeping files; the per-file
+          # .sha256 files are regenerated below because the assets get renamed
+          find packages -type f \
+            ! -name 'manifest*.json' ! -name '.craft.shelf' ! -name '*.sha256' \
+            -exec cp {} assets/ \;
+          cd assets
+          for f in *; do
+            case "$f" in
+              *.exe)      mv "$f" "owncloud.online-client-${VER}-win-x64.exe" ;;
+              *.7z)       mv "$f" "owncloud.online-client-${VER}-win-x64.7z" ;;
+              *.AppImage) mv "$f" "owncloud.online-client-${VER}-linux-x86_64.AppImage" ;;
+            esac
+          done
+          sha256sum * > SHA256SUMS.txt
+          ls -la
+
+      - name: Create release
+        run: |
+          set -euo pipefail
+          TAG="${{ inputs.tag }}"
+          cat > notes.md <<'EOF'
+          **Feature-Release: Datei-Browser direkt in der Ordnerliste**
+
+          Die Remote-Dateistruktur lässt sich jetzt direkt in der App durchsuchen: Jede Sync-Verbindung ist aufklappbar, Unterordner werden live vom Server geladen (mit Größen) und sind beliebig tief expandierbar.
+
+          - Ohne virtuelle Dateien: Selective-Sync-Checkboxen direkt im Baum, Übernahme über die Apply/Discard-Leiste (abgewählte Ordner werden lokal entfernt, Warnung inklusive)
+          - Mit virtuellen Dateien (Windows): Verfügbarkeit pro Ordner sichtbar, Pin-Status per Rechtsklick (Immer behalten / Speicherplatz freigeben / Zurücksetzen)
+          - Gehärtet durch adversarielles Review (15 Funde behoben, u. a. Delta-Merge der Selective-Sync-Blacklist gegen konkurrierende Journal-Änderungen)
+
+          Pakete: Windows-Installer und portables 7z (x64, MSVC 2022) sowie Linux AppImage (x86_64). macOS ist in dieser Version kein Release-Target (FileProvider-VFS in Arbeit).
+          EOF
+          gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
+            --target master \
+            --title "owncloud.online Client ${TAG#v}" \
+            --notes-file notes.md \
+            assets/*
