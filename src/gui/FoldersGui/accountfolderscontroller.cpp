@@ -19,6 +19,7 @@
 #include "application.h"
 #include "commonstrings.h"
 #include "configfile.h"
+#include "folderbrowsercontroller.h"
 #include "foldermodelcontroller.h"
 #include "folderwizard.h"
 #include "selectivesyncwidget.h"
@@ -31,6 +32,8 @@
 #include "theme.h"
 
 #include <QMessageBox>
+#include <QModelIndex>
+#include <QPoint>
 #include <QtWidgets/qabstractbutton.h>
 
 namespace OCC {
@@ -56,6 +59,16 @@ AccountFoldersController::AccountFoldersController(AccountState *state, AccountF
     _view->setItemModels(model, modelController->selectionModel());
 
     connect(_view, &AccountFoldersView::addFolderTriggered, this, &AccountFoldersController::onAddFolder);
+
+    // the browser controller makes the folder rows expandable so the remote directory
+    // structure can be browsed (and selective sync managed) directly in the folder list
+    _browserController = new FolderBrowserController(model, this);
+    connect(_view, &AccountFoldersView::itemExpanded, _browserController, &FolderBrowserController::onItemExpanded);
+    connect(_view, &AccountFoldersView::applySelectiveSyncRequested, _browserController, &FolderBrowserController::applyPendingChanges);
+    connect(_view, &AccountFoldersView::discardSelectiveSyncRequested, _browserController, &FolderBrowserController::discardPendingChanges);
+    connect(_browserController, &FolderBrowserController::selectiveSyncPendingChanged, _view, &AccountFoldersView::setSelectiveSyncPending);
+    connect(_view, &AccountFoldersView::browserMenuRequested, this,
+        [this](const QModelIndex &index, const QPoint &globalPos) { _browserController->popAvailabilityMenu(index, globalPos, _view); });
 
     FolderMan *folderMan = FolderMan::instance();
     modelController->connectSignals(folderMan);

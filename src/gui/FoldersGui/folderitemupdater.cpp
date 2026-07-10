@@ -93,10 +93,14 @@ void FolderItemUpdater::onSyncStateChanged()
         if (_item->folder()->syncResult().hasUnresolvedConflicts())
             errors.append(tr("There are unresolved conflicts."));
 
+        int errorRow = 0;
         for (const QString &error : std::as_const(errors)) {
             QIcon errorIcon = Resources::getCoreIcon("states/warning");
             QStandardItem *errorItem = new QStandardItem(errorIcon, error);
             errorItem->setFlags(Qt::ItemIsSelectable | Qt::ItemIsEnabled);
+            errorItem->setData(static_cast<int>(FolderTreeItemKind::Error), FolderItemRoles::ItemKindRole);
+            // sort errors above the file browser rows (the model sorts descending)
+            errorItem->setData(1, FolderItemRoles::SortPriorityRole);
 
             // just for testing to replace the normal error with something really long - will remove before merge
             /*      QString longError =
@@ -110,12 +114,19 @@ void FolderItemUpdater::onSyncStateChanged()
             QStandardItem *emptyEditorItem = new QStandardItem();
             emptyEditorItem->setFlags(Qt::NoItemFlags);
 
-            _item->appendRow({errorItem, emptyEditorItem});
+            // keep the errors on top, above the file browser rows
+            _item->insertRow(errorRow++, {errorItem, emptyEditorItem});
         }
 
     } else if (status == SyncResult::SyncPrepare && _item->hasChildren()) {
         // I expect this check needs refinement - may want to wait until the sync has actually started before removing previous errors
-        _item->removeRows(0, _item->rowCount());
+        // only drop the error rows; the file browser rows (and their loading placeholder) survive syncs
+        for (int row = _item->rowCount() - 1; row >= 0; --row) {
+            QStandardItem *child = _item->child(row, 0);
+            const int kind = child ? child->data(FolderItemRoles::ItemKindRole).toInt() : 0;
+            if (kind == static_cast<int>(FolderTreeItemKind::Error))
+                _item->removeRow(row);
+        }
     }
 }
 

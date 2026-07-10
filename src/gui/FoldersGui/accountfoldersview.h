@@ -17,6 +17,7 @@
 
 class QStandardItemModel;
 class QItemSelectionModel;
+class QModelIndex;
 class QTreeView;
 class QLabel;
 class QPushButton;
@@ -36,9 +37,18 @@ public:
     void enableAddFolder(bool enableAdd);
     void setMenuActions(QList<QAction *> actions);
 
+    /// shows/hides the apply bar for pending selective sync changes made in the folder browser rows
+    void setSelectiveSyncPending(bool pending);
+
 signals:
     void addFolderTriggered();
     void requestActionsUpdate();
+    /// a row of the folder tree was expanded (folder rows and remote file browser rows)
+    void itemExpanded(const QModelIndex &index);
+    void applySelectiveSyncRequested();
+    void discardSelectiveSyncRequested();
+    /// context menu requested on a remote file browser row
+    void browserMenuRequested(const QModelIndex &index, const QPoint &globalPos);
 
 protected:
     bool eventFilter(QObject *obj, QEvent *ev) override;
@@ -53,6 +63,7 @@ private:
     QLabel *_syncedFolderCountLabel = nullptr;
     QPushButton *_addFolderButton = nullptr;
     QMenu *_itemMenu = nullptr;
+    QWidget *_selectiveSyncApplyBar = nullptr;
     bool _firstShowAfterCreation = true;
 };
 }
