@@ -27,6 +27,7 @@ public:
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    bool editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index) override;
 
 private:
     const int _cellBorder = 10;
@@ -34,6 +35,7 @@ private:
     const int _cellSeparatorWidth = 1;
     const int _namePixelSize = 14;
     const int _lineSpacing = 5;
+    const int _browserCellBorder = 4;
     int _treeIndentation;
 
     // we need a gray that works with light and dark mode so this needs to be refined
@@ -57,5 +59,11 @@ private:
      * @return
      */
     QSize errorSizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const;
+
+    // the remote file browser rows (folders and the loading/info placeholder)
+    static bool isBrowserRow(const QModelIndex &index);
+    void paintBrowserRow(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;
+    QSize browserSizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const;
+    QRect browserCheckRect(const QStyleOptionViewItem &option) const;
 };
 }

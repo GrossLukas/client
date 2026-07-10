@@ -15,6 +15,9 @@
 #include "folderitemdelegate.h"
 
 #include "folderitem.h"
+#include <QApplication>
+#include <QKeyEvent>
+#include <QMouseEvent>
 #include <QPainter>
 
 #include <QTreeView>
@@ -34,7 +37,11 @@ void FolderItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &op
     // many QAbstractItemView settings do not actually work with a tree view - heck, some tree view functions don't work!
     // so I am very wary about this and updating with a new error delegate is now much lower prio.
     if (index.parent().isValid()) {
-        paintError(painter, option, index);
+        if (isBrowserRow(index)) {
+            paintBrowserRow(painter, option, index);
+        } else {
+            paintError(painter, option, index);
+        }
         return;
     }
 
@@ -164,8 +171,11 @@ QSize FolderItemDelegate::sizeHint(const QStyleOptionViewItem &option, const QMo
     // I will try to optimize this later but for the moment, everything looks quite good in action.
 
 
-    if (index.parent().isValid())
+    if (index.parent().isValid()) {
+        if (isBrowserRow(index))
+            return browserSizeHint(option, index);
         return errorSizeHint(option, index);
+    }
 
     QSize defaultSize = QItemDelegate::sizeHint(option, index);
     int firstLineHeight = 0;
@@ -213,6 +223,123 @@ int FolderItemDelegate::calculateErrorIndent(const QStyleOptionViewItem &option)
     // we don't want to do anything special with the tree's indent as that offset should be baked into the option rect during paint
     int totalOffset = iconAreaWidth;
     return totalOffset;
+}
+
+bool FolderItemDelegate::isBrowserRow(const QModelIndex &index)
+{
+    const int kind = index.data(FolderItemRoles::ItemKindRole).toInt();
+    return kind == static_cast<int>(FolderTreeItemKind::BrowserFolder) || kind == static_cast<int>(FolderTreeItemKind::BrowserPlaceholder);
+}
+
+QRect FolderItemDelegate::browserCheckRect(const QStyleOptionViewItem &option) const
+{
+    const QStyle *style = option.widget ? option.widget->style() : QApplication::style();
+    const int width = style->pixelMetric(QStyle::PM_IndicatorWidth, &option, option.widget);
+    const int height = style->pixelMetric(QStyle::PM_IndicatorHeight, &option, option.widget);
+    return QRect(option.rect.left() + _browserCellBorder, option.rect.top() + (option.rect.height() - height) / 2, width, height);
+}
+
+void FolderItemDelegate::paintBrowserRow(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    QStyleOptionViewItem opt(option);
+    QStyleOptionButton buttonStyle;
+    opt.palette.setColor(QPalette::Highlight, buttonStyle.palette.color(QPalette::Highlight));
+    // note: unlike the error rows we must not paint over the indent area here because the
+    // browser rows have expanders of their own, which live in that area
+    drawBackground(painter, opt, index);
+
+    const QFontMetrics metrics(option.font);
+    const int lineHeight = metrics.height();
+    int x = option.rect.left() + _browserCellBorder;
+
+    const bool isPlaceholder = index.data(FolderItemRoles::ItemKindRole).toInt() == static_cast<int>(FolderTreeItemKind::BrowserPlaceholder);
+
+    painter->save();
+
+    if (isPlaceholder) {
+        QFont f = option.font;
+        f.setItalic(true);
+        painter->setFont(f);
+        painter->setPen(_separatorColor);
+        const QRect textRect(x, option.rect.top(), option.rect.right() - x - _browserCellBorder, option.rect.height());
+        painter->drawText(textRect, Qt::TextSingleLine | Qt::AlignVCenter, metrics.elidedText(index.data(Qt::DisplayRole).toString(), Qt::ElideRight, textRect.width()));
+        painter->restore();
+        return;
+    }
+
+    if (index.flags() & Qt::ItemIsUserCheckable) {
+        const QRect checkRect = browserCheckRect(option);
+        QStyleOptionViewItem checkOpt(opt);
+        checkOpt.rect = checkRect;
+        checkOpt.state = checkOpt.state & ~QStyle::State_HasFocus;
+        checkOpt.state |= QStyle::State_Enabled;
+        switch (static_cast<Qt::CheckState>(index.data(Qt::CheckStateRole).toInt())) {
+        case Qt::Checked:
+            checkOpt.state |= QStyle::State_On;
+            break;
+        case Qt::PartiallyChecked:
+            checkOpt.state |= QStyle::State_NoChange;
+            break;
+        case Qt::Unchecked:
+            checkOpt.state |= QStyle::State_Off;
+            break;
+        }
+        const QStyle *style = option.widget ? option.widget->style() : QApplication::style();
+        style->drawPrimitive(QStyle::PE_IndicatorItemViewItemCheck, &checkOpt, painter, option.widget);
+        x = checkRect.right() + _horizontalSpacing;
+    }
+
+    const QIcon icon = index.data(Qt::DecorationRole).value<QIcon>();
+    if (!icon.isNull()) {
+        const QRect iconRect(x, option.rect.top() + (option.rect.height() - lineHeight) / 2, lineHeight, lineHeight);
+        painter->drawPixmap(iconRect, icon.pixmap(iconRect.size()));
+        x = iconRect.right() + _horizontalSpacing;
+    }
+
+    const QString detail = index.data(FolderItemRoles::DetailStringRole).toString();
+    const int detailWidth = detail.isEmpty() ? 0 : metrics.horizontalAdvance(detail) + _horizontalSpacing;
+    const int availableForName = option.rect.right() - _browserCellBorder - x - detailWidth;
+    const QString name = metrics.elidedText(index.data(Qt::DisplayRole).toString(), Qt::ElideRight, availableForName);
+
+    const QRect nameRect(x, option.rect.top(), qMax(0, availableForName), option.rect.height());
+    painter->drawText(nameRect, Qt::TextSingleLine | Qt::AlignVCenter, name);
+
+    if (!detail.isEmpty()) {
+        painter->setPen(_separatorColor);
+        const QRect detailRect(x + metrics.horizontalAdvance(name) + _horizontalSpacing, option.rect.top(), detailWidth, option.rect.height());
+        painter->drawText(detailRect, Qt::TextSingleLine | Qt::AlignVCenter, detail);
+    }
+
+    painter->restore();
+}
+
+QSize FolderItemDelegate::browserSizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    QSize defaultSize = QItemDelegate::sizeHint(option, index);
+    defaultSize.setHeight(option.fontMetrics.height() + 2 * _browserCellBorder);
+    return defaultSize;
+}
+
+bool FolderItemDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const QStyleOptionViewItem &option, const QModelIndex &index)
+{
+    // toggle the selective sync checkbox of browser rows on click or space, the way the
+    // default delegates do for plain checkable items
+    if (index.parent().isValid() && index.data(FolderItemRoles::ItemKindRole).toInt() == static_cast<int>(FolderTreeItemKind::BrowserFolder)
+        && (index.flags() & Qt::ItemIsUserCheckable) && (index.flags() & Qt::ItemIsEnabled)) {
+        const Qt::CheckState currentState = static_cast<Qt::CheckState>(index.data(Qt::CheckStateRole).toInt());
+        const Qt::CheckState nextState = currentState == Qt::Checked ? Qt::Unchecked : Qt::Checked;
+
+        if (event->type() == QEvent::MouseButtonRelease) {
+            const QMouseEvent *mouseEvent = static_cast<QMouseEvent *>(event);
+            if (browserCheckRect(option).contains(mouseEvent->position().toPoint()))
+                return model->setData(index, nextState, Qt::CheckStateRole);
+        } else if (event->type() == QEvent::KeyPress) {
+            const QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+            if (keyEvent->key() == Qt::Key_Space || keyEvent->key() == Qt::Key_Select)
+                return model->setData(index, nextState, Qt::CheckStateRole);
+        }
+    }
+    return QItemDelegate::editorEvent(event, model, option, index);
 }
 
 void FolderItemDelegate::calculateLineHeights(const QStyleOptionViewItem &option, int &firstLineHeight, int &secondLineHeight) const

@@ -27,6 +27,7 @@
 
 #include "buttondelegate.h"
 #include "commonstrings.h"
+#include "folderitem.h"
 #include "folderitemdelegate.h"
 
 namespace OCC {
@@ -131,8 +132,30 @@ void AccountFoldersView::buildView()
 
     _treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(_treeView, &QWidget::customContextMenuRequested, this, &AccountFoldersView::popItemMenu);
+    connect(_treeView, &QTreeView::expanded, this, &AccountFoldersView::itemExpanded);
 
     mainLayout->addWidget(_treeView);
+
+    // apply bar for pending selective sync changes made via the checkboxes of the
+    // remote folder browser rows; hidden until there is something to apply
+    _selectiveSyncApplyBar = new QWidget(this);
+    _selectiveSyncApplyBar->setObjectName("selectiveSyncApplyBar");
+    QHBoxLayout *applyBarLayout = new QHBoxLayout(_selectiveSyncApplyBar);
+    applyBarLayout->setContentsMargins(0, 0, 0, 0);
+    QLabel *applyBarLabel = new QLabel(
+        tr("Unchecked folders will be removed from your local file system and will not be synchronized to this computer anymore."), _selectiveSyncApplyBar);
+    applyBarLabel->setWordWrap(true);
+    applyBarLayout->addWidget(applyBarLabel, 1);
+    QPushButton *applyButton = new QPushButton(tr("Apply"), _selectiveSyncApplyBar);
+    applyButton->setObjectName("applySelectiveSyncButton");
+    connect(applyButton, &QPushButton::clicked, this, &AccountFoldersView::applySelectiveSyncRequested);
+    applyBarLayout->addWidget(applyButton, 0, Qt::AlignRight);
+    QPushButton *discardButton = new QPushButton(tr("Discard"), _selectiveSyncApplyBar);
+    discardButton->setObjectName("discardSelectiveSyncButton");
+    connect(discardButton, &QPushButton::clicked, this, &AccountFoldersView::discardSelectiveSyncRequested);
+    applyBarLayout->addWidget(discardButton, 0, Qt::AlignRight);
+    _selectiveSyncApplyBar->hide();
+    mainLayout->addWidget(_selectiveSyncApplyBar);
 
     _syncedFolderCountLabel = new QLabel("placeholder for sync count", this);
     _syncedFolderCountLabel->setObjectName("syncedFolderCount");
@@ -271,9 +294,24 @@ void AccountFoldersView::refreshMenu()
 
 void AccountFoldersView::popItemMenu(const QPoint &pos)
 {
+    // the remote file browser rows get their own menu (availability management for
+    // virtual files folders); it is built by the controller side
+    const QModelIndex indexUnderCursor = _treeView->indexAt(pos);
+    if (indexUnderCursor.isValid() && indexUnderCursor.parent().isValid()) {
+        const QModelIndex contentIndex = indexUnderCursor.siblingAtColumn(0);
+        if (contentIndex.data(FolderItemRoles::ItemKindRole).toInt() == static_cast<int>(FolderTreeItemKind::BrowserFolder))
+            emit browserMenuRequested(contentIndex, _treeView->viewport()->mapToGlobal(pos));
+        return;
+    }
+
     // only pop the menu on folder items. TODO: possibly work out a secondary menu to allow copy of any sync error(s)
     // shown in the child items. the old folder list had no copy function that I know of so I see this as a nice to have, not a must
     if (!_treeView->currentIndex().parent().isValid())
         _itemMenu->exec(_treeView->viewport()->mapToGlobal(pos));
+}
+
+void AccountFoldersView::setSelectiveSyncPending(bool pending)
+{
+    _selectiveSyncApplyBar->setVisible(pending);
 }
 }

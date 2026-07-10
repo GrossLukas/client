@@ -53,7 +53,9 @@ void FolderModelController::onCurrentChanged(const QModelIndex &current, const Q
         emit currentFolderChanged(nullptr);
         return;
     }
-    if (current.row() == previous.row()) {
+    // note the parent check: a child row (error/file browser) can share the row number of a
+    // top level folder row, which must not be mistaken for "selection did not move"
+    if (current.row() == previous.row() && current.parent() == previous.parent()) {
         _selectionModel->setCurrentIndex(_model->index(current.row(), 1), QItemSelectionModel::Current);
         return;
     }

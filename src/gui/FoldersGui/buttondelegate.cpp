@@ -14,6 +14,7 @@
 
 #include "buttondelegate.h"
 #include "commonstrings.h"
+#include "folderitem.h"
 
 #include <QAbstractItemView>
 #include <QEvent>
@@ -62,10 +63,17 @@ void ButtonDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option
         painter->drawText(option.rect, Qt::AlignCenter, _buttonText);
     }
 
-    painter->setPen(QPen(QBrush("#807F7F7F"), 1));
-    QRect r = option.rect;
-    r.setRight(r.right() - 10);
-    painter->drawLine(r.bottomLeft(), r.bottomRight());
+    // the file browser rows are painted without a separator line, so skip it here too
+    // (the kind role lives on the column 0 item, this delegate paints column 1)
+    const int kind = index.siblingAtColumn(0).data(FolderItemRoles::ItemKindRole).toInt();
+    const bool isBrowserRow = index.parent().isValid()
+        && (kind == static_cast<int>(FolderTreeItemKind::BrowserFolder) || kind == static_cast<int>(FolderTreeItemKind::BrowserPlaceholder));
+    if (!isBrowserRow) {
+        painter->setPen(QPen(QBrush("#807F7F7F"), 1));
+        QRect r = option.rect;
+        r.setRight(r.right() - 10);
+        painter->drawLine(r.bottomLeft(), r.bottomRight());
+    }
     painter->restore();
 }
 
@@ -112,7 +120,9 @@ bool ButtonDelegate::editorEvent(QEvent *event, QAbstractItemModel *model, const
     // implement the menu auto-pop when clicking the delegate directly
     // super important! we can't use MouseButtonPress or the menu doesn't pop when eg the tree is not already focused
     // no idea why this is but release is the way to go, 100%
-    if (event->type() == QEvent::MouseButtonRelease) {
+    // note: only the top level folder rows have the options button - clicking next to a child row
+    // (error or file browser rows) must not pop the folder menu
+    if (event->type() == QEvent::MouseButtonRelease && !index.parent().isValid()) {
         QAbstractItemView *view = qobject_cast<QAbstractItemView *>(parent());
         if (view) {
             QModelIndex current = view->currentIndex();

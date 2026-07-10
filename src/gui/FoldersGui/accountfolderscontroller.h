@@ -27,6 +27,7 @@ namespace OCC {
 
 class AccountFoldersView;
 class AccountState;
+class FolderBrowserController;
 class FolderModelController;
 class AccountModalWidget;
 
@@ -52,6 +53,7 @@ private:
     QPointer<Folder> _currentFolder = nullptr;
     AccountFoldersView *_view = nullptr;
     FolderModelController *_modelController = nullptr;
+    FolderBrowserController *_browserController = nullptr;
 
     void buildMenuActions();
 
