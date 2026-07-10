@@ -285,15 +285,20 @@ void FolderBrowserController::requestListing(Folder *folder, const QString &relP
     job->setProperties({QByteArrayLiteral("resourcetype"), QByteArrayLiteral("http://owncloud.org/ns:size")});
 
     _pendingJobs.insert(jobKey);
+    // catch-all cleanup; the result handlers below additionally remove the key up front
+    // because the job is only destroyed via deleteLater - a relist triggered from inside
+    // a result handler (VFS toggled mid-flight) must not be dropped by the dedup check
     connect(job, &QObject::destroyed, this, [this, jobKey] { _pendingJobs.remove(jobKey); });
 
     QPointer<Folder> folderGuard(folder);
-    connect(job, &PropfindJob::directoryListingSubfolders, this, [this, job, folderGuard, relPath](const QStringList &subfolders) {
+    connect(job, &PropfindJob::directoryListingSubfolders, this, [this, job, jobKey, folderGuard, relPath](const QStringList &subfolders) {
+        _pendingJobs.remove(jobKey);
         if (!folderGuard)
             return;
         populateListing(folderGuard, relPath, subfolders, job->sizes());
     });
-    connect(job, &PropfindJob::finishedWithError, this, [this, job, folderGuard, relPath] {
+    connect(job, &PropfindJob::finishedWithError, this, [this, job, jobKey, folderGuard, relPath] {
+        _pendingJobs.remove(jobKey);
         if (!folderGuard)
             return;
         const bool notFound = job->reply() && job->reply()->error() == QNetworkReply::ContentNotFoundError;
@@ -659,7 +664,9 @@ void FolderBrowserController::applyPendingChanges()
         refreshCheckStates(rootItem, merged);
         FolderMan::instance()->forceFolderSync(folder);
     }
-    emit selectiveSyncPendingChanged(false);
+    // not a plain 'false': a folder whose journal read failed above keeps its pending
+    // edits, and the apply bar must keep showing them
+    recomputePending();
 }
 
 void FolderBrowserController::discardPendingChanges()
