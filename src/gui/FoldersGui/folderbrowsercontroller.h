@@ -77,7 +77,8 @@ private:
     };
 
     void ensureSyncState(Folder *folder);
-    void maybeRefreshFolderState(Folder *folder, FolderItem *rootItem);
+    /// returns true when the folder's browser subtree was rebuilt (VFS mode changed)
+    bool maybeRefreshFolderState(Folder *folder, FolderItem *rootItem);
     void attachPlaceholder(QStandardItem *parentItem);
     void requestListing(Folder *folder, const QString &relPath);
     void populateListing(Folder *folder, const QString &parentRelPath, const QStringList &subfolders, const QHash<QString, qint64> &sizes);
@@ -90,7 +91,7 @@ private:
 
     static Qt::CheckState stateForPath(const QSet<QString> &blackList, const QString &pathWithSlash);
     void propagateCheckChange(QStandardItem *item);
-    QSet<QString> computeBlackList(const QStandardItem *parentItem, const QSet<QString> &journalBlackList) const;
+    QSet<QString> computeBlackList(const QStandardItem *parentItem, const QSet<QString> &previousBlackList) const;
     void recomputePending();
     void refreshCheckStates(QStandardItem *parentItem, const QSet<QString> &blackList);
     void refreshAvailability(Folder *folder, QStandardItem *item, bool recursive);

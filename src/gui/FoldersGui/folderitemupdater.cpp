@@ -112,7 +112,8 @@ void FolderItemUpdater::onSyncStateChanged()
             errorItem->setData(accessibleError, Qt::AccessibleTextRole);
 
             QStandardItem *emptyEditorItem = new QStandardItem();
-            emptyEditorItem->setFlags(Qt::NoItemFlags);
+            // enabled (but nothing else) so keyboard navigation in column 1 can step onto the row
+            emptyEditorItem->setFlags(Qt::ItemIsEnabled);
 
             // keep the errors on top, above the file browser rows
             _item->insertRow(errorRow++, {errorItem, emptyEditorItem});

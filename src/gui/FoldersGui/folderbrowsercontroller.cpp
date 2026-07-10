@@ -25,9 +25,11 @@
 
 #include "resources/resources.h"
 
+#include <QCollator>
 #include <QLoggingCategory>
 #include <QMenu>
 #include <QNetworkReply>
+#include <QPersistentModelIndex>
 #include <QPointer>
 #include <QScopedValueRollback>
 #include <QStandardItemModel>
@@ -86,6 +88,10 @@ void FolderBrowserController::onRowsInserted(const QModelIndex &parent, int firs
         if (!placeholderChild(folderItem) && browserChildren(folderItem).isEmpty())
             attachPlaceholder(folderItem);
     }
+
+    // a folder list rebuild destroys the browser rows and with them any unapplied checkbox
+    // edits; recompute so stored pending state and the apply bar stay in agreement
+    recomputePending();
 }
 
 void FolderBrowserController::ensureSyncState(Folder *folder)
@@ -124,7 +130,8 @@ void FolderBrowserController::attachPlaceholder(QStandardItem *parentItem)
     placeholder->setData(-1, FolderItemRoles::SortPriorityRole);
 
     QStandardItem *filler = new QStandardItem();
-    filler->setFlags(Qt::NoItemFlags);
+    // enabled (but nothing else) so keyboard navigation in column 1 can step onto the row
+    filler->setFlags(Qt::ItemIsEnabled);
 
     QScopedValueRollback<bool> guard(_updatingModel, true);
     parentItem->appendRow({placeholder, filler});
@@ -197,10 +204,16 @@ void FolderBrowserController::onItemExpanded(const QModelIndex &index)
     if (!item)
         return;
 
+    // run the staleness checks on every expansion in the subtree, not only the root:
+    // toggling virtual files invalidates all rows of the folder. When the subtree was
+    // rebuilt, the expanded child row is gone - relist the (still expanded) root instead.
+    if (maybeRefreshFolderState(folder, rootItem)) {
+        requestListing(folder, QString());
+        return;
+    }
+
     QString relPath;
-    if (item == rootItem) {
-        maybeRefreshFolderState(folder, rootItem);
-    } else {
+    if (item != rootItem) {
         if (itemKind(item) != static_cast<int>(FolderTreeItemKind::BrowserFolder))
             return;
         relPath = item->data(FolderItemRoles::RemotePathRole).toString();
@@ -211,16 +224,17 @@ void FolderBrowserController::onItemExpanded(const QModelIndex &index)
     requestListing(folder, relPath);
 }
 
-void FolderBrowserController::maybeRefreshFolderState(Folder *folder, FolderItem *rootItem)
+bool FolderBrowserController::maybeRefreshFolderState(Folder *folder, FolderItem *rootItem)
 {
     const QString key = folderKey(folder);
     auto it = _syncStates.find(key);
     if (it == _syncStates.end())
-        return;
+        return false;
 
     // virtual files may have been toggled since the rows were built; the row mode
     // (checkboxes vs. availability) is then stale, so rebuild the subtree from scratch
     // and reload the journal state
+    bool rebuilt = false;
     if (it->vfsAtLoad != folder->virtualFilesEnabled()) {
         {
             QScopedValueRollback<bool> guard(_updatingModel, true);
@@ -233,9 +247,12 @@ void FolderBrowserController::maybeRefreshFolderState(Folder *folder, FolderItem
         attachPlaceholder(rootItem);
         _syncStates.remove(key);
         ensureSyncState(folder);
+        // the rebuild dropped any pending edits, make the apply bar reflect that
+        recomputePending();
         it = _syncStates.find(key);
         if (it == _syncStates.end())
-            return;
+            return true;
+        rebuilt = true;
     }
 
     // pick up blacklist changes made elsewhere (e.g. the "Manage subfolder sync" modal),
@@ -249,6 +266,7 @@ void FolderBrowserController::maybeRefreshFolderState(Folder *folder, FolderItem
             refreshCheckStates(rootItem, journal);
         }
     }
+    return rebuilt;
 }
 
 void FolderBrowserController::requestListing(Folder *folder, const QString &relPath)
@@ -307,6 +325,14 @@ void FolderBrowserController::populateListing(Folder *folder, const QString &par
     FolderItem *rootItem = rootItemForFolder(folder);
     if (!rootItem)
         return;
+
+    // the listing is async: virtual files may have been toggled while it was in flight,
+    // in which case these results describe rows of the wrong mode - rebuild and relist
+    if (maybeRefreshFolderState(folder, rootItem)) {
+        requestListing(folder, QString());
+        return;
+    }
+
     QStandardItem *parentItem = itemForPath(rootItem, parentRelPath);
     if (!parentItem)
         return;
@@ -358,6 +384,11 @@ void FolderBrowserController::populateListing(Folder *folder, const QString &par
 
     QScopedValueRollback<bool> guard(_updatingModel, true);
 
+    // same collation as Utility::sortFilenames, for ordered insertion among existing rows
+    QCollator collator;
+    collator.setNumericMode(true);
+    collator.setCaseSensitivity(Qt::CaseInsensitive);
+
     // index what is already in the tree below this parent
     QHash<QString, QStandardItem *> existing;
     for (QStandardItem *child : browserChildren(parentItem))
@@ -382,16 +413,18 @@ void FolderBrowserController::populateListing(Folder *folder, const QString &par
                 child->setCheckState(stateForPath(syncState.pendingBlackList, Utility::ensureTrailingSlash(entry.relPath)));
 
             QStandardItem *filler = new QStandardItem();
-            filler->setFlags(Qt::NoItemFlags);
+            // enabled (but nothing else) so keyboard navigation in column 1 can step onto the row
+            filler->setFlags(Qt::ItemIsEnabled);
 
-            // keep the rows in filename order: insert before the first browser row that
-            // should come later (error rows at the top and the placeholder stay put)
+            // keep the rows in filename order (same collation as Utility::sortFilenames):
+            // insert before the first browser row that should come later (error rows at
+            // the top and the placeholder stay put)
             int insertRow = parentItem->rowCount();
             for (int row = 0; row < parentItem->rowCount(); ++row) {
                 QStandardItem *sibling = parentItem->child(row, 0);
                 const int kind = itemKind(sibling);
                 if (kind == static_cast<int>(FolderTreeItemKind::BrowserPlaceholder)
-                    || (kind == static_cast<int>(FolderTreeItemKind::BrowserFolder) && QString::compare(sibling->text(), name, Qt::CaseInsensitive) > 0)) {
+                    || (kind == static_cast<int>(FolderTreeItemKind::BrowserFolder) && collator.compare(sibling->text(), name) > 0)) {
                     insertRow = row;
                     break;
                 }
@@ -399,6 +432,10 @@ void FolderBrowserController::populateListing(Folder *folder, const QString &par
             parentItem->insertRow(insertRow, {child, filler});
             // give the new row its own expander; a Depth::One listing cannot tell
             // whether the subfolder has children, so assume it does until expanded
+            attachPlaceholder(child);
+        } else if (!placeholderChild(child) && browserChildren(child).isEmpty()) {
+            // the row was previously listed as empty and lost its placeholder; restore the
+            // expander so subfolders created on the server later remain discoverable
             attachPlaceholder(child);
         }
         setBrowserRowDetails(folder, child, entry.relPath, entry.size, vfsMode);
@@ -461,6 +498,15 @@ void FolderBrowserController::onItemChanged(QStandardItem *item)
         return;
 
     propagateCheckChange(item);
+
+    // only the edited folder's pending list is recomputed from its rows; the unloaded-subtree
+    // fallback uses the previous pending list because that is what seeded the check states
+    FolderItem *rootItem = rootItemForIndex(item->index());
+    if (rootItem && rootItem->folder()) {
+        auto it = _syncStates.find(folderKey(rootItem->folder()));
+        if (it != _syncStates.end())
+            it->pendingBlackList = computeBlackList(rootItem, it->pendingBlackList);
+    }
     recomputePending();
 }
 
@@ -499,7 +545,7 @@ void FolderBrowserController::propagateCheckChange(QStandardItem *item)
     }
 }
 
-QSet<QString> FolderBrowserController::computeBlackList(const QStandardItem *parentItem, const QSet<QString> &journalBlackList) const
+QSet<QString> FolderBrowserController::computeBlackList(const QStandardItem *parentItem, const QSet<QString> &previousBlackList) const
 {
     QSet<QString> result;
     for (QStandardItem *child : browserChildren(parentItem)) {
@@ -512,11 +558,11 @@ QSet<QString> FolderBrowserController::computeBlackList(const QStandardItem *par
             break;
         case Qt::PartiallyChecked: {
             if (!browserChildren(child).isEmpty()) {
-                result += computeBlackList(child, journalBlackList);
+                result += computeBlackList(child, previousBlackList);
             } else {
-                // subtree not loaded from the server; whatever the journal excluded
-                // below this folder is still authoritative
-                for (const QString &entry : journalBlackList) {
+                // subtree not loaded from the server; the previous list (which seeded
+                // the check states) stays authoritative below this folder
+                for (const QString &entry : previousBlackList) {
                     if (entry.startsWith(path))
                         result.insert(entry);
                 }
@@ -530,21 +576,24 @@ QSet<QString> FolderBrowserController::computeBlackList(const QStandardItem *par
 
 void FolderBrowserController::recomputePending()
 {
+    // the pending lists themselves are maintained in onItemChanged; this only decides
+    // whether the apply bar shows, and drops edits the user can no longer see or change
     bool anyDirty = false;
     for (int row = 0; row < _model->rowCount(); ++row) {
         FolderItem *rootItem = dynamic_cast<FolderItem *>(_model->item(row, 0));
         if (!rootItem || !rootItem->folder())
             continue;
         Folder *folder = rootItem->folder();
-        if (folder->virtualFilesEnabled())
-            continue;
         auto it = _syncStates.find(folderKey(folder));
         if (it == _syncStates.end())
             continue;
-        // nothing browsed yet -> nothing the user could have edited here
-        if (browserChildren(rootItem).isEmpty())
+        if (folder->virtualFilesEnabled() || browserChildren(rootItem).isEmpty()) {
+            // the rows are gone (folder list rebuild) or the folder switched to virtual
+            // files: the edits have no visible representation anymore, discard them
+            // instead of silently committing them on the next apply
+            it->pendingBlackList = it->journalBlackList;
             continue;
-        it->pendingBlackList = computeBlackList(rootItem, it->journalBlackList);
+        }
         if (it->pendingBlackList != it->journalBlackList)
             anyDirty = true;
     }
@@ -561,10 +610,53 @@ void FolderBrowserController::applyPendingChanges()
         auto it = _syncStates.find(folderKey(folder));
         if (it == _syncStates.end() || it->pendingBlackList == it->journalBlackList)
             continue;
+        if (folder->virtualFilesEnabled()) {
+            // selective sync does not apply under virtual files; stale edits from before
+            // a mode switch must never reach the journal
+            it->pendingBlackList = it->journalBlackList;
+            continue;
+        }
 
-        qCInfo(lcFolderBrowser) << "Applying selective sync changes for" << folder->path();
-        folder->journalDb()->setSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList, it->pendingBlackList);
-        it->journalBlackList = it->pendingBlackList;
+        // the journal can have changed underneath us (the "Manage subfolder sync" modal,
+        // remote renames of blacklisted folders, ...). Never write our snapshot wholesale:
+        // re-read the journal and apply only the user's delta on top of it.
+        bool ok = false;
+        QSet<QString> merged = folder->journalDb()->getSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList, ok);
+        if (!ok) {
+            qCWarning(lcFolderBrowser) << "Could not read selective sync list for" << folder->path() << "- not applying changes";
+            continue;
+        }
+        const QSet<QString> added = it->pendingBlackList - it->journalBlackList;
+        const QSet<QString> removed = it->journalBlackList - it->pendingBlackList;
+        for (const QString &entry : removed)
+            merged.remove(entry);
+        for (const QString &entry : added) {
+            // entries below a newly blacklisted folder are redundant
+            for (auto m = merged.begin(); m != merged.end();) {
+                if (m->startsWith(entry))
+                    m = merged.erase(m);
+                else
+                    ++m;
+            }
+        }
+        for (const QString &entry : added) {
+            bool coveredByAncestor = false;
+            for (const QString &m : std::as_const(merged)) {
+                if (entry != m && entry.startsWith(m)) {
+                    coveredByAncestor = true;
+                    break;
+                }
+            }
+            if (!coveredByAncestor)
+                merged.insert(entry);
+        }
+
+        qCInfo(lcFolderBrowser) << "Applying selective sync changes for" << folder->path() << "- excluding" << added << "- re-including" << removed;
+        folder->journalDb()->setSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList, merged);
+        it->journalBlackList = merged;
+        it->pendingBlackList = merged;
+        // reflect entries that were changed externally in the loaded rows too
+        refreshCheckStates(rootItem, merged);
         FolderMan::instance()->forceFolderSync(folder);
     }
     emit selectiveSyncPendingChanged(false);
@@ -619,13 +711,17 @@ void FolderBrowserController::popAvailabilityMenu(const QModelIndex &index, cons
     FolderItem *rootItem = rootItemForIndex(index);
     if (!rootItem || !rootItem->folder())
         return;
-    Folder *folder = rootItem->folder();
-    if (!folder->virtualFilesEnabled())
+    if (!rootItem->folder()->virtualFilesEnabled())
         return;
 
     QStandardItem *item = _model->itemFromIndex(index.siblingAtColumn(0));
     if (!item || itemKind(item) != static_cast<int>(FolderTreeItemKind::BrowserFolder))
         return;
+
+    // menu.exec() spins a nested event loop: the folder can be removed and the row can be
+    // pruned by an in-flight listing while the menu is open, so guard and re-resolve after
+    QPointer<Folder> folder(rootItem->folder());
+    const QPersistentModelIndex persistentIndex(index.siblingAtColumn(0));
 
     QMenu menu(menuParent);
     QAction *keepLocal = menu.addAction(tr("Always keep on this device"));
@@ -642,6 +738,12 @@ void FolderBrowserController::popAvailabilityMenu(const QModelIndex &index, cons
     else if (chosen == reset)
         state = PinState::Inherited;
     else
+        return;
+
+    if (!folder || !folder->virtualFilesEnabled() || !persistentIndex.isValid())
+        return;
+    item = _model->itemFromIndex(QModelIndex(persistentIndex));
+    if (!item || itemKind(item) != static_cast<int>(FolderTreeItemKind::BrowserFolder))
         return;
 
     const QString relPath = item->data(FolderItemRoles::RemotePathRole).toString();

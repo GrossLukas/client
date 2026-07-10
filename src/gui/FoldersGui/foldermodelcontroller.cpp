@@ -50,6 +50,11 @@ FolderModelController::FolderModelController(const QUuid &accountId, QObject *pa
 void FolderModelController::onCurrentChanged(const QModelIndex &current, const QModelIndex &previous)
 {
     if (current.parent().isValid()) {
+        // child rows (errors, file browser) carry their content in column 0; putting the
+        // current index there lets the column 0 delegate receive keyboard events (e.g.
+        // space to toggle a selective sync checkbox)
+        if (current.column() != 0)
+            _selectionModel->setCurrentIndex(current.siblingAtColumn(0), QItemSelectionModel::Current);
         emit currentFolderChanged(nullptr);
         return;
     }
