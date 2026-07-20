@@ -658,6 +658,12 @@ void FolderBrowserController::applyPendingChanges()
 
         qCInfo(lcFolderBrowser) << "Applying selective sync changes for" << folder->path() << "- excluding" << added << "- re-including" << removed;
         folder->journalDb()->setSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList, merged);
+        // re-included folders were never stored in the journal; force their parents
+        // to be re-discovered remotely, otherwise they stay invisible until an
+        // unrelated remote change happens to bump the parent etag
+        for (const QString &entry : removed) {
+            folder->journalDb()->schedulePathForRemoteDiscovery(entry);
+        }
         it->journalBlackList = merged;
         it->pendingBlackList = merged;
         // reflect entries that were changed externally in the loaded rows too

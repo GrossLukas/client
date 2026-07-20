@@ -18,6 +18,7 @@
 #include "accountmanager.h"
 #include "common/restartmanager.h"
 #include "common/utility.h"
+#include "gui/settingsdialog.h"
 #include "gui/application.h"
 #include "gui/logbrowser.h"
 #include "gui/networkinformation.h"
@@ -199,6 +200,11 @@ void maybePromptWindowsRestartAfterInstall(OCC::Application *app)
     OCC::ConfigFile cfg;
     const QString currentVersion = OCC::Version::versionWithBuildNumber().toString();
     if (cfg.rebootPromptedForVersion() == currentVersion) {
+        return;
+    }
+    // Don't interrupt the very first setup: the account wizard is running. The
+    // marker stays unset, so the prompt comes up on the next start instead.
+    if (AccountManager::instance()->accounts().isEmpty()) {
         return;
     }
 

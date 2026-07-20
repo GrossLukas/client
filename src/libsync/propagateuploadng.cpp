@@ -141,6 +141,13 @@ PropagateUploadFileNG::PropagateUploadFileNG(OwncloudPropagator *propagator, con
 }
 void PropagateUploadFileNG::doStartUpload()
 {
+    // All upload jobs are constructed up front when the propagator builds its job
+    // tree, so the run-wide serial fallback has to be picked up here, at the time
+    // the transfer actually starts (a deadlock may have happened since).
+    if (propagator()->_serializeChunkUploads) {
+        _maxParallelChunks = 1;
+    }
+
     const QString fileName = propagator()->fullLocalPath(_item->_file);
     // If the file is currently locked, we want to retry the sync
     // when it becomes available again.
@@ -376,10 +383,10 @@ void PropagateUploadFileNG::slotMkColFinished()
             _maxParallelChunks = 1;
             qCWarning(lcPropagateUploadNG) << "Transient server error (transaction deadlock) on MKCOL for" << _item->_file
                                            << "- retry" << _transientRetryCount << "of" << maxTransientRetries;
-            propagator()->_activeJobList.append(this);
             const auto delay = transientRetryDelay(_transientRetryCount);
             QTimer::singleShot(delay, this, [this] {
-                if (!_finished && !propagator()->_abortRequested) {
+                if (!_finished && !_aborting && !propagator()->_abortRequested) {
+                    propagator()->_activeJobList.append(this);
                     startNewUpload();
                 }
             });
@@ -523,7 +530,7 @@ void PropagateUploadFileNG::slotPutFinished()
             }
             const auto delay = transientRetryDelay(_transientRetryCount);
             QTimer::singleShot(delay, this, [this] {
-                if (!_finished && !propagator()->_abortRequested) {
+                if (!_finished && !_aborting && !propagator()->_abortRequested) {
                     scheduleChunks();
                 }
             });
@@ -619,7 +626,7 @@ void PropagateUploadFileNG::slotMoveJobFinished()
             _finished = false;
             const auto delay = transientRetryDelay(_transientRetryCount);
             QTimer::singleShot(delay, this, [this] {
-                if (!_finished && !propagator()->_abortRequested) {
+                if (!_finished && !_aborting && !propagator()->_abortRequested) {
                     doFinalMove();
                 }
             });

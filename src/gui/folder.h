@@ -469,6 +469,17 @@ private:
      * or keep it excluded. folderPath must have a trailing slash. */
     void setNewBigFolderApproval(const QString &folderPath, bool approved);
 
+    /** Shows the approval dialogs one at a time (a sync can discover many big folders) */
+    void showNextBigFolderPrompt();
+
+    struct BigFolderPrompt
+    {
+        QString path;
+        bool isExternal = false;
+    };
+    QList<BigFolderPrompt> _pendingBigFolderPrompts;
+    bool _bigFolderPromptActive = false;
+
     void showSyncResultPopup();
 
     bool checkLocalPath();
