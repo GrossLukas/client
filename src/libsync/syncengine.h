@@ -144,6 +144,10 @@ Q_SIGNALS:
     void syncError(const QString &message, ErrorCategory category = ErrorCategory::Normal);
     void excluded(const QString &path);
 
+    /** A new remote folder was not synced because it needs user confirmation
+     * (larger than the configured limit, or on an external storage). */
+    void newBigFolder(const QString &folder, bool isExternal);
+
     void finished(bool success);
     void started();
 

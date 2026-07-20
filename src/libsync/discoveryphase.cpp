@@ -17,6 +17,9 @@
 
 #include "common/asserts.h"
 #include "common/checksums.h"
+#include "common/utility.h"
+#include "common/vfs.h"
+#include "networkjobs.h"
 
 #include "vio/csync_vio_local.h"
 
@@ -24,6 +27,8 @@
 #include <QFile>
 #include <QLoggingCategory>
 #include <QUrl>
+
+#include <memory>
 
 namespace OCC {
 
@@ -68,6 +73,53 @@ bool DiscoveryPhase::isInSelectiveSyncBlackList(const QString &path) const
     }
 
     return false;
+}
+
+void DiscoveryPhase::checkSelectiveSyncNewFolder(const QString &path, RemotePermissions remotePerm, const std::function<void(bool)> &callback)
+{
+    if (_syncOptions._confirmExternalStorage && _syncOptions._vfs->mode() == Vfs::Off
+        && remotePerm.hasPermission(RemotePermissions::IsMounted)) {
+        // external storage mount point: always ask, regardless of size
+        Q_EMIT newBigFolder(path, true);
+        return callback(true);
+    }
+    if (_syncOptions._newBigFolderSizeLimit < 0) {
+        // no limit configured, everything is allowed
+        return callback(false);
+    }
+    if (findPathInList(_selectiveSyncWhiteList, path)) {
+        // the folder (or a parent) was already approved
+        return callback(false);
+    }
+
+    // We need the recursive folder size from the server to compare against the limit
+    const qint64 limit = _syncOptions._newBigFolderSizeLimit;
+    auto *job = new PropfindJob(_account, _baseUrl, _remoteFolder + path, PropfindJob::Depth::Zero, this);
+    job->setProperties({QByteArrayLiteral("resourcetype"), QByteArrayLiteral("http://owncloud.org/ns:size")});
+    auto size = std::make_shared<qint64>(-1);
+    connect(job, &PropfindJob::directoryListingIterated, this, [size](const QString &, const QMap<QString, QString> &properties) {
+        bool ok = false;
+        const qint64 value = properties.value(QStringLiteral("size")).toLongLong(&ok);
+        if (ok) {
+            *size = value;
+        }
+    });
+    connect(job, &PropfindJob::finishedWithoutError, this, [this, path, size, limit, callback] {
+        if (*size >= 0 && *size >= limit) {
+            // the folder is too big: the user has to confirm it first
+            Q_EMIT newBigFolder(path, false);
+            return callback(true);
+        }
+        // Below the limit (or size unknown, allow in that case): remember the
+        // approval in the in-memory whitelist so the children are not queried again.
+        _selectiveSyncWhiteList.insert(Utility::ensureTrailingSlash(path));
+        return callback(false);
+    });
+    connect(job, &PropfindJob::finishedWithError, this, [callback] {
+        // querying the size failed; don't hold the folder hostage over it
+        return callback(false);
+    });
+    job->start();
 }
 
 /* Given a path on the remote, give the path as it is when the rename is done */

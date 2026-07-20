@@ -35,12 +35,43 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QRandomGenerator>
+#include <QTimer>
 
 #include <memory>
 
 namespace OCC {
 
 Q_LOGGING_CATEGORY(lcPropagateUploadNG, "sync.propagator.upload.ng", QtInfoMsg)
+
+namespace {
+
+    // Maximum number of in-run retries for transient server errors per transfer.
+    // Enough to ride out a busy database without ever spinning forever.
+    constexpr int maxTransientRetries = 10;
+
+    /* oc10 on MySQL/MariaDB occasionally rejects an operation on the uploads
+     * directory with a rolled-back transaction when requests race each other:
+     *   "SQLSTATE[40001]: Serialization failure: 1213 Deadlock found when
+     *    trying to get lock; try restarting transaction"
+     * The server explicitly asks for a retry, so treat this as transient
+     * instead of failing the whole transfer. */
+    bool isTransientServerError(int httpCode, const QByteArray &errorBody)
+    {
+        if (httpCode < 500) {
+            return false;
+        }
+        return errorBody.contains("SQLSTATE[40001]") || errorBody.contains("1213 Deadlock")
+            || errorBody.contains("Deadlock found") || errorBody.contains("try restarting transaction");
+    }
+
+    std::chrono::milliseconds transientRetryDelay(int attempt)
+    {
+        // 500ms, 1s, 2s, 4s, 8s, then capped, plus jitter so parallel clients spread out
+        const int exponent = qMin(attempt - 1, 4);
+        const int base = qMin(500 * (1 << exponent), 8000);
+        return std::chrono::milliseconds(base + int(QRandomGenerator::global()->bounded(250)));
+    }
+}
 
 QString PropagateUploadFileNG::chunkPath(qint64 chunkOffset)
 {
@@ -95,6 +126,17 @@ PropagateUploadFileNG::PropagateUploadFileNG(OwncloudPropagator *propagator, con
     // multiplexed streams), so push more chunks in parallel there.
     if (propagator->account() && propagator->account()->isHttp2Supported()) {
         _maxParallelChunks = 6;
+    }
+    // Admin override, e.g. for servers whose database cannot cope with
+    // concurrent chunk PUTs into the same upload directory (set to 1).
+    const int envMaxParallelChunks = qEnvironmentVariableIntValue("OWNCLOUD_MAX_PARALLEL_CHUNKS");
+    if (envMaxParallelChunks > 0) {
+        _maxParallelChunks = qBound(1, envMaxParallelChunks, 16);
+    }
+    // A transfer of this sync run already hit a server-side transaction
+    // deadlock: don't keep provoking it with concurrent chunk PUTs.
+    if (propagator->_serializeChunkUploads) {
+        _maxParallelChunks = 1;
     }
 }
 void PropagateUploadFileNG::doStartUpload()
@@ -324,6 +366,25 @@ void PropagateUploadFileNG::slotMkColFinished()
 
     QNetworkReply::NetworkError err = job->reply()->error();
     if (err != QNetworkReply::NoError || _item->_httpErrorCode != 201) {
+        // With several transfers running, even the MKCOL of the upload directory
+        // can hit the server-side transaction deadlock; it is safe to repeat.
+        const QByteArray errorBody = job->reply()->peek(128 * 1024);
+        if (err != QNetworkReply::NoError && isTransientServerError(_item->_httpErrorCode, errorBody)
+            && _transientRetryCount < maxTransientRetries) {
+            ++_transientRetryCount;
+            propagator()->_serializeChunkUploads = true;
+            _maxParallelChunks = 1;
+            qCWarning(lcPropagateUploadNG) << "Transient server error (transaction deadlock) on MKCOL for" << _item->_file
+                                           << "- retry" << _transientRetryCount << "of" << maxTransientRetries;
+            propagator()->_activeJobList.append(this);
+            const auto delay = transientRetryDelay(_transientRetryCount);
+            QTimer::singleShot(delay, this, [this] {
+                if (!_finished && !propagator()->_abortRequested) {
+                    startNewUpload();
+                }
+            });
+            return;
+        }
         _item->_requestId = job->requestId();
         SyncFileItem::Status status = classifyError(err, _item->_httpErrorCode,
             &propagator()->_anotherSyncNeeded);
@@ -405,7 +466,7 @@ void PropagateUploadFileNG::scheduleChunks()
         // job takes ownership of device via a std::unique_ptr. Job deletes itself when finishing
         PUTFileJob *job = new PUTFileJob(propagator()->account(), propagator()->account()->url(), chunkPath(offset), std::move(device), {}, this);
         addChildJob(job);
-        _inFlightChunks.insert(job, size);
+        _inFlightChunks.insert(job, {offset, size});
         connect(job, &PUTFileJob::finishedSignal, this, &PropagateUploadFileNG::slotPutFinished);
         connect(job, &PUTFileJob::uploadProgress, this, &PropagateUploadFileNG::slotUploadProgress);
         job->start();
@@ -430,7 +491,8 @@ void PropagateUploadFileNG::slotPutFinished()
     _item->_requestId = job->requestId();
 
     propagator()->_activeJobList.removeOne(this);
-    const qint64 chunkSize = _inFlightChunks.take(job);
+    const UploadRangeInfo chunkRange = _inFlightChunks.take(job);
+    const qint64 chunkSize = chunkRange.size;
 
     if (_finished) {
         // The upload already finished (the assembling MOVE was started or an error
@@ -441,6 +503,32 @@ void PropagateUploadFileNG::slotPutFinished()
     QNetworkReply::NetworkError err = job->reply()->error();
 
     if (err != QNetworkReply::NoError) {
+        // peek so a later commonErrorHandling() can still read the full body
+        const QByteArray errorBody = job->reply()->peek(128 * 1024);
+        if (isTransientServerError(_item->_httpErrorCode, errorBody) && _transientRetryCount < maxTransientRetries) {
+            ++_transientRetryCount;
+            // Concurrent chunk PUTs into the same upload directory are what
+            // provokes the database deadlock: finish this transfer serially,
+            // and let the rest of the sync run start serial right away.
+            _maxParallelChunks = 1;
+            propagator()->_serializeChunkUploads = true;
+            // re-queue the failed range; it will be re-sent by scheduleChunks()
+            _rangesToUpload.append(chunkRange);
+            qCWarning(lcPropagateUploadNG) << "Transient server error (transaction deadlock) on chunk at offset" << chunkRange.start << "of"
+                                           << _item->_file << "- retry" << _transientRetryCount << "of" << maxTransientRetries << "(serialized)";
+            if (!_inFlightChunks.isEmpty()) {
+                // the remaining in-flight chunks drain first; their completion
+                // re-enters scheduleChunks(), now limited to one chunk at a time
+                return;
+            }
+            const auto delay = transientRetryDelay(_transientRetryCount);
+            QTimer::singleShot(delay, this, [this] {
+                if (!_finished && !propagator()->_abortRequested) {
+                    scheduleChunks();
+                }
+            });
+            return;
+        }
         commonErrorHandling(job);
         return;
     }
@@ -520,6 +608,23 @@ void PropagateUploadFileNG::slotMoveJobFinished()
     _item->_requestId = job->requestId();
 
     if (err != QNetworkReply::NoError) {
+        // The assembling MOVE races the chunk bookkeeping in the server database
+        // as well; a deadlocked (rolled back) MOVE is safe to repeat.
+        const QByteArray errorBody = job->reply()->peek(128 * 1024);
+        if (isTransientServerError(_item->_httpErrorCode, errorBody) && _transientRetryCount < maxTransientRetries) {
+            ++_transientRetryCount;
+            propagator()->_serializeChunkUploads = true;
+            qCWarning(lcPropagateUploadNG) << "Transient server error (transaction deadlock) on final MOVE of" << _item->_file
+                                           << "- retry" << _transientRetryCount << "of" << maxTransientRetries;
+            _finished = false;
+            const auto delay = transientRetryDelay(_transientRetryCount);
+            QTimer::singleShot(delay, this, [this] {
+                if (!_finished && !propagator()->_abortRequested) {
+                    doFinalMove();
+                }
+            });
+            return;
+        }
         commonErrorHandling(job);
         return;
     }

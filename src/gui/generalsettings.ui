@@ -187,6 +187,62 @@
         </widget>
        </item>
        <item>
+        <widget class="QGroupBox" name="approveSyncGroupBox">
+         <property name="title">
+          <string>Advanced - Approve folder sync (non-virtual files mode only)</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_7">
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_6">
+            <item>
+             <widget class="QCheckBox" name="newFolderLimitCheckBox">
+              <property name="text">
+               <string>Ask for confirmation before synchronizing folders larger than</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="newFolderLimitSpinBox">
+              <property name="suffix">
+               <string> MB</string>
+              </property>
+              <property name="minimum">
+               <number>1</number>
+              </property>
+              <property name="maximum">
+               <number>999999</number>
+              </property>
+              <property name="value">
+               <number>500</number>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="spacer_4">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="newExternalCheckBox">
+            <property name="text">
+             <string>Ask for confirmation before synchronizing external storages</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <widget class="QGroupBox" name="groupBox">
          <property name="title">
           <string>Network</string>

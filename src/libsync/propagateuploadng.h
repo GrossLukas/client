@@ -89,9 +89,14 @@ private:
      * links. Kept modest to avoid opening too many connections per file. */
     int _maxParallelChunks = 3;
 
-    /** Chunk PUTs currently in flight, mapping the job to the byte size of its
-     * chunk (used for progress/sent accounting once the chunk completes). */
-    QHash<PUTFileJob *, qint64> _inFlightChunks;
+    /** Chunk PUTs currently in flight, mapping the job to the byte range it
+     * carries (size for progress accounting; the full range so a chunk that
+     * failed with a transient server error can be re-queued and re-sent). */
+    QHash<PUTFileJob *, UploadRangeInfo> _inFlightChunks;
+
+    /** Number of in-run retries spent on transient server errors (oc10/MySQL
+     * transaction deadlocks on the upload directory) for this transfer. */
+    int _transientRetryCount = 0;
 
     /**
      * Return the path of a chunk.

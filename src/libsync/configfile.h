@@ -17,6 +17,7 @@
 #include "owncloudlib.h"
 
 #include <QNetworkProxy>
+#include <QPair>
 #include <QSettings>
 #include <QSharedPointer>
 #include <QString>
@@ -130,6 +131,21 @@ public:
     /** Show the main window on startup instead of starting to the system tray only */
     bool showMainDialogOnStartup() const;
     void setShowMainDialogOnStartup(bool);
+
+    /** Ask for confirmation before syncing new remote folders larger than the limit.
+        first = enabled, second = limit in MB (default 500, enabled). Only meaningful
+        while virtual files are off. */
+    QPair<bool, qint64> newBigFolderSizeLimit() const;
+    void setNewBigFolderSizeLimit(bool isChecked, qint64 mbytes);
+    bool useNewBigFolderSizeLimit() const;
+
+    /** Ask for confirmation before syncing folders from external storages */
+    bool confirmExternalStorage() const;
+    void setConfirmExternalStorage(bool);
+
+    /** Version for which the Windows post-install restart prompt was already shown */
+    QString rebootPromptedForVersion() const;
+    void setRebootPromptedForVersion(const QString &version);
 
     /** Allow HTTP/2 for HTTPS connections. Opt-in/experimental, off by default;
         toggling takes effect after a restart. */

@@ -459,7 +459,16 @@ private Q_SLOTS:
     /** Warn users about an unreliable folder watcher */
     void slotWatcherUnreliable(const QString &message);
 
+    /** A new remote folder needs user confirmation before it is synced (larger
+     * than the configured limit, or on an external storage). Parks it on the
+     * blacklist + undecided list and asks the user. */
+    void slotNewBigFolderDiscovered(const QString &newFolder, bool isExternal);
+
 private:
+    /** Resolution of slotNewBigFolderDiscovered: sync the folder after all (approved)
+     * or keep it excluded. folderPath must have a trailing slash. */
+    void setNewBigFolderApproval(const QString &folderPath, bool approved);
+
     void showSyncResultPopup();
 
     bool checkLocalPath();

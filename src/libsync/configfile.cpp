@@ -85,6 +85,12 @@ const QString pauseSyncWhenMeteredC()
 }
 const QString moveToTrashC() { return QStringLiteral("moveToTrash"); }
 const QString showMainDialogOnStartupC() { return QStringLiteral("showMainDialogOnStartup"); }
+// key names match the classic 2.x client so existing configs keep working
+const QString newBigFolderSizeLimitC() { return QStringLiteral("newBigFolderSizeLimit"); }
+const QString useNewBigFolderSizeLimitC() { return QStringLiteral("useNewBigFolderSizeLimit"); }
+const QString confirmExternalStorageC() { return QStringLiteral("confirmExternalStorage"); }
+// version marker for the Windows post-install/update restart prompt
+const QString rebootPromptedForVersionC() { return QStringLiteral("rebootPromptedForVersion"); }
 const QString enableHttp2C() { return QStringLiteral("enableHttp2"); }
 const QString useUploadLimitC() { return QStringLiteral("useUploadLimit"); }
 const QString uploadLimitC() { return QStringLiteral("uploadLimit"); }
@@ -518,6 +524,45 @@ bool ConfigFile::showMainDialogOnStartup() const
 void ConfigFile::setShowMainDialogOnStartup(bool isChecked)
 {
     setValue(showMainDialogOnStartupC(), isChecked);
+}
+
+QPair<bool, qint64> ConfigFile::newBigFolderSizeLimit() const
+{
+    const auto defaultLimit = 500;
+    qint64 value = getValue(newBigFolderSizeLimitC(), QString(), defaultLimit).toLongLong();
+    bool use = value >= 0 && useNewBigFolderSizeLimit();
+    return qMakePair(use, qMax<qint64>(0, value));
+}
+
+void ConfigFile::setNewBigFolderSizeLimit(bool isChecked, qint64 mbytes)
+{
+    setValue(newBigFolderSizeLimitC(), mbytes);
+    setValue(useNewBigFolderSizeLimitC(), isChecked);
+}
+
+bool ConfigFile::useNewBigFolderSizeLimit() const
+{
+    return getValue(useNewBigFolderSizeLimitC(), QString(), true).toBool();
+}
+
+bool ConfigFile::confirmExternalStorage() const
+{
+    return getValue(confirmExternalStorageC(), QString(), true).toBool();
+}
+
+void ConfigFile::setConfirmExternalStorage(bool isChecked)
+{
+    setValue(confirmExternalStorageC(), isChecked);
+}
+
+QString ConfigFile::rebootPromptedForVersion() const
+{
+    return getValue(rebootPromptedForVersionC(), QString(), QString()).toString();
+}
+
+void ConfigFile::setRebootPromptedForVersion(const QString &version)
+{
+    setValue(rebootPromptedForVersionC(), version);
 }
 
 bool ConfigFile::enableHttp2() const

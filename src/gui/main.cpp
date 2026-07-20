@@ -41,6 +41,7 @@
 #include <QLibraryInfo>
 #include <QMessageBox>
 #include <QProcess>
+#include <QPushButton>
 #include <QTimer>
 #include <QTranslator>
 #ifdef Q_OS_WIN
@@ -184,6 +185,48 @@ void showDowngradeDialog()
     box.exec();
     QTimer::singleShot(0, qApp, &QApplication::quit);
 }
+
+#ifdef Q_OS_WIN
+/**
+ * After an installation or update, Windows should be restarted so that the
+ * Explorer integration (overlay icons, context menu, virtual files sync root)
+ * is loaded reliably. The installer itself cannot enforce this, so prompt on
+ * the first start of each new version and offer to run the restart directly.
+ */
+void maybePromptWindowsRestartAfterInstall(OCC::Application *app)
+{
+    OCC::ConfigFile cfg;
+    const QString currentVersion = OCC::Version::versionWithBuildNumber().toString();
+    if (cfg.rebootPromptedForVersion() == currentVersion) {
+        return;
+    }
+
+    QMessageBox *box = new QMessageBox(QMessageBox::Information, Theme::instance()->appNameGUI(),
+        QCoreApplication::translate("restart prompt",
+            "%1 has been installed or updated. To complete the installation, Windows needs to be "
+            "restarted so that the file explorer integration works correctly.")
+            .arg(Theme::instance()->appNameGUI()),
+        QMessageBox::NoButton, app->gui()->settingsDialog());
+    box->setObjectName("restartWindowsAfterInstallDialog");
+    QPushButton *restartButton = box->addButton(QCoreApplication::translate("restart prompt", "Restart Windows now"), QMessageBox::AcceptRole);
+    restartButton->setObjectName("restartWindowsNowButton");
+    QPushButton *laterButton = box->addButton(QCoreApplication::translate("restart prompt", "Restart later"), QMessageBox::RejectRole);
+    laterButton->setObjectName("restartWindowsLaterButton");
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    QObject::connect(box, &QMessageBox::finished, box, [box, restartButton, currentVersion] {
+        // never ask again for this version, no matter the choice
+        OCC::ConfigFile().setRebootPromptedForVersion(currentVersion);
+        if (box->clickedButton() == restartButton) {
+            const QString reason = QCoreApplication::translate("restart prompt", "%1 installation finished - restarting Windows")
+                                       .arg(Theme::instance()->appNameGUI());
+            QProcess::startDetached(QStringLiteral("shutdown.exe"),
+                {QStringLiteral("/r"), QStringLiteral("/t"), QStringLiteral("10"), QStringLiteral("/c"), reason});
+            QTimer::singleShot(0, qApp, &QApplication::quit);
+        }
+    });
+    box->open();
+}
+#endif
 
 /**
  * Check if the last version used to write the config file differs from the current version.
@@ -513,6 +556,11 @@ int main(int argc, char **argv)
 
         // Now that everything is up and running, start accepting connections/requests from the shell integration.
         folderManager->socketApi()->startShellIntegration();
+
+#ifdef Q_OS_WIN
+        // Prompt (once per installed version) for the Windows restart that completes the installation.
+        QTimer::singleShot(0, ocApp.get(), [app = ocApp.get()] { maybePromptWindowsRestartAfterInstall(app); });
+#endif
 
         return app.exec();
     }).exec(argc, argv);

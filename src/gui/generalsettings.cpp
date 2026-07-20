@@ -75,6 +75,14 @@ GeneralSettings::GeneralSettings(QWidget *parent)
         Q_EMIT syncOptionsChanged();
     });
 
+    // folder sync approval (only effective while virtual files are off)
+    connect(_ui->newFolderLimitCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
+        _ui->newFolderLimitSpinBox->setEnabled(checked);
+        saveApproveSyncSettings();
+    });
+    connect(_ui->newFolderLimitSpinBox, QOverload<int>::of(&QSpinBox::valueChanged), this, &GeneralSettings::saveApproveSyncSettings);
+    connect(_ui->newExternalCheckBox, &QCheckBox::toggled, this, &GeneralSettings::saveApproveSyncSettings);
+
     // OEM themes are not obliged to ship mono icons, so there
     // is no point in offering an option
     _ui->monoIconsCheckBox->setVisible(Resources::hasMonoTheme());
@@ -108,6 +116,12 @@ void GeneralSettings::loadMiscSettings()
     _ui->showWindowOnStartCheckBox->setChecked(cfgFile.showMainDialogOnStartup());
     _ui->enableHttp2CheckBox->setChecked(cfgFile.enableHttp2());
 
+    const auto newBigFolderSizeLimit = cfgFile.newBigFolderSizeLimit();
+    _ui->newFolderLimitCheckBox->setChecked(newBigFolderSizeLimit.first);
+    _ui->newFolderLimitSpinBox->setValue(int(newBigFolderSizeLimit.second));
+    _ui->newFolderLimitSpinBox->setEnabled(newBigFolderSizeLimit.first);
+    _ui->newExternalCheckBox->setChecked(cfgFile.confirmExternalStorage());
+
     // the dropdown has to be populated before we can can pick an entry below based on the stored setting
     loadLanguageNamesIntoDropdown();
 
@@ -134,6 +148,17 @@ void GeneralSettings::saveMiscSettings()
     // the first entry, identified by index 0, means "use default", which is a special case handled below
     const QString pickedLocale = _ui->languageDropdown->currentData().toString();
     cfgFile.setUiLanguage(pickedLocale);
+}
+
+void GeneralSettings::saveApproveSyncSettings()
+{
+    if (_currentlyLoading)
+        return;
+    ConfigFile cfgFile;
+    cfgFile.setNewBigFolderSizeLimit(_ui->newFolderLimitCheckBox->isChecked(), _ui->newFolderLimitSpinBox->value());
+    cfgFile.setConfirmExternalStorage(_ui->newExternalCheckBox->isChecked());
+    // routes to FolderMan::slotReloadSyncOptions so running folders pick it up
+    Q_EMIT syncOptionsChanged();
 }
 
 void GeneralSettings::slotToggleLaunchOnStartup(bool enable)
