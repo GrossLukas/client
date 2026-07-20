@@ -416,6 +416,7 @@ void SyncEngine::startSync()
     connect(_discoveryPhase.get(), &DiscoveryPhase::silentlyExcluded, _syncFileStatusTracker.data(), &SyncFileStatusTracker::slotAddSilentlyExcluded);
     connect(_discoveryPhase.get(), &DiscoveryPhase::excluded, _syncFileStatusTracker.data(), &SyncFileStatusTracker::slotAddSilentlyExcluded);
     connect(_discoveryPhase.get(), &DiscoveryPhase::excluded, this, &SyncEngine::excluded);
+    connect(_discoveryPhase.get(), &DiscoveryPhase::newBigFolder, this, &SyncEngine::newBigFolder);
 
     auto discoveryJob = new ProcessDirectoryJob(_discoveryPhase.get(), PinState::AlwaysLocal, _discoveryPhase.get());
     _discoveryPhase->startJob(discoveryJob);

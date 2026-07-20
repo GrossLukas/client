@@ -433,9 +433,28 @@ void ProcessDirectoryJob::processFileAnalyzeRemoteInfo(
     item->_size = serverEntry.size;
 
     auto postProcessServerNew = [=]() mutable {
+        const auto &opts = _discoveryData->_syncOptions;
+
+        // A new directory on the server may need explicit user approval before it
+        // is synced: larger than the configured limit, or on an external storage.
+        // Needs an async size PROPFIND, so the entry is finalized from the callback.
+        if (serverEntry.isDirectory && opts._vfs->mode() == Vfs::Off
+            && (opts._newBigFolderSizeLimit >= 0 || opts._confirmExternalStorage)) {
+            _pendingAsyncJobs++;
+            _discoveryData->checkSelectiveSyncNewFolder(path._server, serverEntry.remotePerm, [=](bool needsConfirmation) mutable {
+                _pendingAsyncJobs--;
+                if (!needsConfirmation) {
+                    processFileAnalyzeLocalInfo(item, path, localEntry, serverEntry, dbEntry, _queryServer);
+                }
+                // when confirmation is required the entry is skipped this sync;
+                // Folder::slotNewBigFolderDiscovered blacklists it for the next runs
+                QTimer::singleShot(0, _discoveryData, &DiscoveryPhase::scheduleMoreJobs);
+            });
+            return;
+        }
+
         // Turn new remote files into virtual files if the option is enabled.
         // TODO: move the decision to the backend
-        const auto &opts = _discoveryData->_syncOptions;
         if (!localEntry.isValid()
             && item->_type == ItemTypeFile
             && opts._vfs->mode() != Vfs::Off

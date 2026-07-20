@@ -206,6 +206,15 @@ class DiscoveryPhase : public QObject
 
     bool isInSelectiveSyncBlackList(const QString &path) const;
 
+    /** Check if the NEW remote folder should be blocked pending user confirmation.
+     *
+     * May be async (a Depth::Zero PROPFIND is needed to learn the folder size).
+     * The callback receives true when the folder must NOT be synced now (it was
+     * announced via newBigFolder() and is expected to land on the blacklist),
+     * false when processing can continue normally.
+     */
+    void checkSelectiveSyncNewFolder(const QString &path, RemotePermissions remotePerm, const std::function<void(bool)> &callback);
+
     /** Given an original path, return the target path obtained when renaming is done.
      *
      * Note that it only considers parent directory renames. So if A/B got renamed to C/D,
@@ -272,6 +281,10 @@ Q_SIGNALS:
       */
     void silentlyExcluded(const QString &folderPath);
     void excluded(const QString &folderPath);
+
+    /** A new remote folder needs user confirmation before it is synced: it is
+      * larger than the configured limit, or lives on an external storage. */
+    void newBigFolder(const QString &folder, bool isExternal);
 
 private:
     QPointer<Account> _account;

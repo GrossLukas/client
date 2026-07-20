@@ -43,6 +43,8 @@
 #include "common/utility_win.h"
 #endif
 
+#include <QMessageBox>
+#include <QPushButton>
 #include <QTimer>
 #include <QUrl>
 #include <QDir>
@@ -141,6 +143,7 @@ Folder::Folder(const FolderDefinition &definition, AccountState *accountState, s
         connect(ProgressDispatcher::instance(), &ProgressDispatcher::folderConflicts,
             this, &Folder::slotFolderConflicts);
         connect(_engine.data(), &SyncEngine::excluded, this, [this](const QString &path) { Q_EMIT ProgressDispatcher::instance()->excluded(this, path); });
+        connect(_engine.data(), &SyncEngine::newBigFolder, this, &Folder::slotNewBigFolderDiscovered);
 
         _localDiscoveryTracker.reset(new LocalDiscoveryTracker);
         connect(_engine.data(), &SyncEngine::finished,
@@ -255,6 +258,16 @@ SyncOptions Folder::loadSyncOptions()
     opt._moveFilesToTrash = cfgFile.moveToTrash();
     // got a nullptr hit here - this is so shady but best I can do for now
     opt._parallelNetworkJobs = (_accountState && _accountState->account() && _accountState->account()->isHttp2Supported()) ? 20 : 6;
+
+    // Folder-sync approval only applies while virtual files are off: with virtual
+    // files new folders only produce placeholders and cost no disk space.
+    if (_vfs && _vfs->mode() == Vfs::Off) {
+        const auto newBigFolderSizeLimit = cfgFile.newBigFolderSizeLimit();
+        if (newBigFolderSizeLimit.first) {
+            opt._newBigFolderSizeLimit = newBigFolderSizeLimit.second * 1000LL * 1000LL; // MB -> bytes
+        }
+        opt._confirmExternalStorage = cfgFile.confirmExternalStorage();
+    }
 
     opt.fillFromEnvironmentVariables();
     return opt;
@@ -1105,6 +1118,96 @@ void Folder::warnOnNewExcludedItem(const SyncJournalFileRecord &record, QStringV
               .arg(fi.filePath());
 
     ocApp()->gui()->slotShowOptionalTrayMessage(Theme::instance()->appNameGUI(), message);
+}
+
+void Folder::slotNewBigFolderDiscovered(const QString &newF, bool isExternal)
+{
+    const QString newFolder = Utility::ensureTrailingSlash(newF);
+
+    bool blacklistOk = false;
+    bool whitelistOk = false;
+    auto blacklist = _journal.getSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList, blacklistOk);
+    auto whitelist = _journal.getSelectiveSyncList(SyncJournalDb::SelectiveSyncWhiteList, whitelistOk);
+    if (!blacklistOk || !whitelistOk) {
+        qCWarning(lcFolder) << "Could not read selective sync lists from the journal";
+        return;
+    }
+
+    // park the folder on the blacklist so the next sync runs skip it deterministically
+    // until the user has decided
+    if (!blacklist.contains(newFolder) && !whitelist.contains(newFolder)) {
+        blacklist.insert(newFolder);
+        _journal.setSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList, blacklist);
+    }
+
+    bool undecidedOk = false;
+    auto undecidedList = _journal.getSelectiveSyncList(SyncJournalDb::SelectiveSyncUndecidedList, undecidedOk);
+    if (!undecidedOk || undecidedList.contains(newFolder)) {
+        // already announced earlier (or journal unreadable) - don't ask again
+        return;
+    }
+    undecidedList.insert(newFolder);
+    _journal.setSelectiveSyncList(SyncJournalDb::SelectiveSyncUndecidedList, undecidedList);
+
+    const auto limit = ConfigFile().newBigFolderSizeLimit();
+    const QString message = isExternal
+        ? tr("A folder from an external storage has been added: %1").arg(newFolder)
+        : tr("A new folder larger than %1 MB has been added: %2").arg(QString::number(limit.second), newFolder);
+    ocApp()->gui()->slotShowOptionalTrayMessage(Theme::instance()->appNameGUI(), message);
+
+    // ask right away so the common case needs no trip to the selective sync settings
+    QMessageBox *msgBox = new QMessageBox(QMessageBox::Question, Theme::instance()->appNameGUI(),
+        (isExternal ? tr("The folder %1 was added on the server from an external storage.").arg(newFolder)
+                    : tr("The new folder %1 on the server is larger than %2 MB.").arg(newFolder, QString::number(limit.second)))
+            + QStringLiteral("\n\n") + tr("Do you want to synchronize it to this computer?"),
+        QMessageBox::NoButton, ocApp()->gui()->settingsDialog());
+    msgBox->setObjectName("confirmNewBigFolderDialog");
+    QPushButton *syncButton = msgBox->addButton(tr("Synchronize"), QMessageBox::YesRole);
+    syncButton->setObjectName("syncNewBigFolderButton");
+    QPushButton *skipButton = msgBox->addButton(tr("Do not synchronize"), QMessageBox::NoRole);
+    skipButton->setObjectName("skipNewBigFolderButton");
+    msgBox->setAttribute(Qt::WA_DeleteOnClose);
+    connect(msgBox, &QMessageBox::finished, this, [this, msgBox, syncButton, newFolder] {
+        setNewBigFolderApproval(newFolder, msgBox->clickedButton() == syncButton);
+    });
+    ownCloudGui::raise();
+    msgBox->open();
+}
+
+void Folder::setNewBigFolderApproval(const QString &folderPath, bool approved)
+{
+    // the folder was parked on the blacklist and the undecided list when discovered
+    bool undecidedOk = false;
+    auto undecidedList = _journal.getSelectiveSyncList(SyncJournalDb::SelectiveSyncUndecidedList, undecidedOk);
+    if (undecidedOk && undecidedList.remove(folderPath)) {
+        _journal.setSelectiveSyncList(SyncJournalDb::SelectiveSyncUndecidedList, undecidedList);
+    }
+
+    if (!approved) {
+        // declined: the blacklist entry stays, nothing else to do
+        qCInfo(lcFolder) << "User declined syncing the new folder" << folderPath;
+        return;
+    }
+
+    bool blacklistOk = false;
+    bool whitelistOk = false;
+    auto blacklist = _journal.getSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList, blacklistOk);
+    auto whitelist = _journal.getSelectiveSyncList(SyncJournalDb::SelectiveSyncWhiteList, whitelistOk);
+    if (!blacklistOk || !whitelistOk) {
+        qCWarning(lcFolder) << "Could not read selective sync lists from the journal";
+        return;
+    }
+    qCInfo(lcFolder) << "User approved syncing the new folder" << folderPath;
+    if (blacklist.remove(folderPath)) {
+        _journal.setSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList, blacklist);
+    }
+    if (!whitelist.contains(folderPath)) {
+        whitelist.insert(folderPath);
+        _journal.setSelectiveSyncList(SyncJournalDb::SelectiveSyncWhiteList, whitelist);
+    }
+    // make sure the folder is rediscovered and fetched on the sync we trigger now
+    _journal.schedulePathForRemoteDiscovery(folderPath);
+    FolderMan::instance()->forceFolderSync(this);
 }
 
 void Folder::slotWatcherUnreliable(const QString &message)

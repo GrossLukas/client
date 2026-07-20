@@ -39,6 +39,15 @@ public:
     /** If remotely deleted files are needed to move to trash */
     bool _moveFilesToTrash = false;
 
+    /** Size limit in bytes above which a NEW remote folder needs user confirmation
+     * before it is synced. Negative = feature disabled. Only used while virtual
+     * files are off. */
+    qint64 _newBigFolderSizeLimit = -1;
+
+    /** Ask for confirmation before syncing folders from external storages. Only
+     * used while virtual files are off. */
+    bool _confirmExternalStorage = false;
+
     /** Create a virtual file for new files instead of downloading. May not be null */
     QSharedPointer<Vfs> _vfs;
 

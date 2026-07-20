@@ -431,6 +431,12 @@ public:
      */
     qint64 _chunkSize;
 
+    /** Once a chunked upload ran into a server-side transaction deadlock
+     * (oc10/MySQL rejects concurrent operations on the same upload directory
+     * with SQLSTATE 40001), all further chunked uploads of this sync run send
+     * their chunks serially instead of in parallel to stop provoking it. */
+    bool _serializeChunkUploads = false;
+
     qint64 smallFileSize();
 
     /* The maximum number of active jobs in parallel  */
