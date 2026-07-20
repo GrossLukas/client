@@ -185,6 +185,30 @@ jobs:
         & "${env:GITHUB_WORKSPACE}/.github/workflows/.craft.ps1" -c --shelve "${env:GITHUB_WORKSPACE}/.craft.shelf"
         Copy-Item "${env:GITHUB_WORKSPACE}/.craft.shelf" "${env:GITHUB_WORKSPACE}/binaries/"
 
+    # Wraps the craft installer into a setup exe that stops a running client,
+    # installs silently and requires + performs the Windows restart needed for
+    # the Explorer integration (see admin/win/restart-wrapper.nsi).
+    - name: Build Windows setup wrapper
+      if: runner.os == 'Windows'
+      run: |
+        $exe = Get-ChildItem "${env:GITHUB_WORKSPACE}/binaries" -Filter "*.exe" | Where-Object { $_.Name -notlike "*-Setup*" } | Select-Object -First 1
+        if (-not $exe) { Write-Host "No installer exe in binaries/, skipping wrapper"; exit 0 }
+        $makensis = (Get-Command makensis.exe -ErrorAction SilentlyContinue).Source
+        if (-not $makensis) {
+          choco install nsis -y --no-progress
+          $makensis = "C:\Program Files (x86)\NSIS\makensis.exe"
+        }
+        $content = Get-Content "${env:GITHUB_WORKSPACE}/VERSION.cmake" -Raw
+        $maj = [regex]::Match($content, 'MIRALL_VERSION_MAJOR (\d+)').Groups[1].Value
+        $min = [regex]::Match($content, 'MIRALL_VERSION_MINOR (\d+)').Groups[1].Value
+        $pat = [regex]::Match($content, 'MIRALL_VERSION_PATCH (\d+)').Groups[1].Value
+        $version = "$maj.$min.$pat"
+        $out = "${env:GITHUB_WORKSPACE}/binaries/$($exe.BaseName)-Setup.exe"
+        Set-Location "${env:GITHUB_WORKSPACE}/admin/win"
+        & $makensis "/DSOURCE_EXE=$($exe.FullName)" "/DOUTFILE=$out" "/DVERSION=$version" restart-wrapper.nsi
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+        Get-ChildItem "${env:GITHUB_WORKSPACE}/binaries"
+
     - name: Upload artifacts
       uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
       with:
