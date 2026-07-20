@@ -17,6 +17,7 @@
 
 #include "accountmanager.h"
 #include "common/restartmanager.h"
+#include "common/utility.h"
 #include "gui/application.h"
 #include "gui/logbrowser.h"
 #include "gui/networkinformation.h"
@@ -217,6 +218,8 @@ void maybePromptWindowsRestartAfterInstall(OCC::Application *app)
         // never ask again for this version, no matter the choice
         OCC::ConfigFile().setRebootPromptedForVersion(currentVersion);
         if (box->clickedButton() == restartButton) {
+            // make sure the client is back after the reboot
+            OCC::Utility::setLaunchOnStartup(Theme::instance()->appName(), Theme::instance()->appNameGUI(), true);
             const QString reason = QCoreApplication::translate("restart prompt", "%1 installation finished - restarting Windows")
                                        .arg(Theme::instance()->appNameGUI());
             QProcess::startDetached(QStringLiteral("shutdown.exe"),

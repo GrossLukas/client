@@ -20,8 +20,10 @@
 #include <QHeaderView>
 #include <QLabel>
 #include <QMenu>
+#include <QPersistentModelIndex>
 #include <QPushButton>
 #include <QStandardItemModel>
+#include <QTimer>
 #include <QTreeView>
 #include <QVBoxLayout>
 
@@ -256,6 +258,22 @@ void AccountFoldersView::setItemModels(QStandardItemModel *model, QItemSelection
     QItemSelectionModel *origSelectionModel = _treeView->selectionModel();
     _treeView->setSelectionModel(selectionModel);
     origSelectionModel->deleteLater();
+
+    // Expand folder rows as soon as they appear so the remote structure is
+    // visible right away, like the classic client showed it. Deferred so the
+    // browser rows (loading placeholder) attach first; expanding triggers the
+    // lazy listing via the itemExpanded signal.
+    connect(model, &QAbstractItemModel::rowsInserted, this, [this](const QModelIndex &parent, int first, int last) {
+        if (parent.isValid())
+            return;
+        for (int row = first; row <= last; ++row) {
+            const QPersistentModelIndex persistent(_treeView->model()->index(row, 0));
+            QTimer::singleShot(0, this, [this, persistent] {
+                if (persistent.isValid())
+                    _treeView->expand(QModelIndex(persistent));
+            });
+        }
+    });
 
     // these settings can only work if/when the model has been added to the view because the header "data" comes from the model.
     // without the header data the logical indexes do not exist so...we can't do it in the ctr unless we inject the models there.
