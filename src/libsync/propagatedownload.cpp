@@ -33,6 +33,7 @@
 #include <QFileInfo>
 #include <QLoggingCategory>
 #include <QRandomGenerator>
+#include <QTimer>
 
 #include <cmath>
 
@@ -46,6 +47,49 @@ namespace OCC {
 
 Q_LOGGING_CATEGORY(lcGetJob, "sync.networkjob.get", QtInfoMsg)
 Q_LOGGING_CATEGORY(lcPropagateDownload, "sync.propagator.download", QtInfoMsg)
+
+namespace {
+
+    // Consecutive ZERO-PROGRESS resume attempts before the transfer is handed to
+    // the normal error handling. Attempts that received data don't count: a large
+    // download that keeps moving is resumed in-run indefinitely. (Counterpart of
+    // the transient-retry logic in propagateuploadng.cpp.)
+    constexpr int maxStalledRetries = 10;
+
+    std::chrono::milliseconds downloadRetryDelay(int attempt)
+    {
+        // 500ms, 1s, 2s, 4s, 8s, then capped, plus jitter
+        const int exponent = qMin(attempt, 4);
+        const int base = qMin(500 * (1 << exponent), 8000);
+        return std::chrono::milliseconds(base + int(QRandomGenerator::global()->bounded(250)));
+    }
+
+    /* Interruptions that a resumed GET can recover from: dropped/stalled
+     * connections, proxy hiccups and server-side 5xx conditions. 4xx replies
+     * (except the separately handled 416) are not transient. */
+    bool isTransientDownloadError(QNetworkReply::NetworkError err, int httpCode)
+    {
+        if (httpCode >= 400 && httpCode < 500) {
+            return false;
+        }
+        switch (err) {
+        case QNetworkReply::RemoteHostClosedError:
+        case QNetworkReply::TimeoutError:
+        case QNetworkReply::OperationCanceledError: // the caller ensures this is a job timeout, not an abort
+        case QNetworkReply::TemporaryNetworkFailureError:
+        case QNetworkReply::NetworkSessionFailedError:
+        case QNetworkReply::UnknownNetworkError:
+        case QNetworkReply::ProxyConnectionClosedError:
+        case QNetworkReply::ProxyTimeoutError:
+        case QNetworkReply::InternalServerError:
+        case QNetworkReply::ServiceUnavailableError:
+        case QNetworkReply::UnknownServerError:
+            return true;
+        default:
+            return false;
+        }
+    }
+}
 
 
 namespace CernRecallFeature {
@@ -697,6 +741,58 @@ void PropagateDownloadFile::slotGetFinished()
             return;
         }
 
+        // ---- resilient large-download resume ------------------------------
+        // A long transfer must survive connection drops, stalls and server
+        // hiccups instead of failing the file (or - via the FatalError
+        // classification of timeouts - aborting the whole sync). Resume
+        // in-run from the partial temp file; attempts that received data
+        // reset the counter, so a download that keeps making progress is
+        // resumed indefinitely and only repeated zero-progress attempts
+        // eventually hand over to the normal error handling.
+        const bool userAborted = _abortRequested
+            || (err == QNetworkReply::OperationCanceledError && !job->timedOut());
+        if (!userAborted && !badRangeHeader && !fileNotFound
+            && _item->_directDownloadUrl.isEmpty()
+            && isTransientDownloadError(err, _item->_httpErrorCode)) {
+            const qint64 bytesSoFar = _tmpFile.exists() ? _tmpFile.size() : 0;
+            if (bytesSoFar > _bytesAtLastAttempt) {
+                _transientRetryCount = 0; // progress was made - keep going
+            } else {
+                ++_transientRetryCount;
+            }
+            _bytesAtLastAttempt = bytesSoFar;
+            if (_transientRetryCount < maxStalledRetries) {
+                // when the empty temp file was wiped above, recreate it
+                if (!_tmpFile.isOpen() && !_tmpFile.open(QIODevice::Append | QIODevice::Unbuffered)) {
+                    qCWarning(lcPropagateDownload) << "cannot reopen temporary file for resume:" << _tmpFile.errorString();
+                } else {
+                    _resumeStart = _tmpFile.size();
+                    _downloadProgress = 0;
+                    if (_expectedEtagForResume.isEmpty()) {
+                        _expectedEtagForResume = _item->_etag;
+                    }
+                    qCWarning(lcPropagateDownload) << "Transient download error for" << _item->_file << "-" << job->errorString()
+                                                   << "- resuming at" << _resumeStart
+                                                   << "(stalled attempt" << _transientRetryCount << "of" << maxStalledRetries << ")";
+                    const auto delay = downloadRetryDelay(_transientRetryCount);
+                    QTimer::singleShot(delay, this, [this] {
+                        if (state() != Finished && !_abortRequested && !propagator()->_abortRequested) {
+                            startFullDownload();
+                        }
+                    });
+                    return;
+                }
+            }
+            // Out of zero-progress retries: fall through to the regular error
+            // handling. The partial file survives and the next sync run (which
+            // the short download backoff makes happen soon) resumes it. Make
+            // sure only this file fails: a timeout would otherwise classify as
+            // FatalError and abort the entire sync.
+            job->setErrorStatus(SyncFileItem::NormalError);
+            propagator()->_anotherSyncNeeded = true;
+        }
+        // --------------------------------------------------------------------
+
         // This gives a custom QNAM (by the user of libowncloudsync) to abort() a QNetworkReply in its metaDataChanged() slot and
         // set a custom error string to make this a soft error. In contrast to the default hard error this won't bring down
         // the whole sync and allows for a custom error message.
@@ -1015,6 +1111,8 @@ void PropagateDownloadFile::slotDownloadProgress(qint64 received, qint64)
 
 void PropagateDownloadFile::abort(PropagatorJob::AbortType abortType)
 {
+    // also stops a pending in-run resume retry
+    _abortRequested = true;
     if (_job) {
         _job->abort();
     }

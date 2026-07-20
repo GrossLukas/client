@@ -199,6 +199,13 @@ private:
     bool _deleteExisting;
     ConflictRecord _conflictRecord;
 
+    /** In-run resilience for large downloads: consecutive resume attempts that
+     * made NO progress. Reset to zero whenever bytes arrived, so a transfer
+     * that keeps moving is retried indefinitely. */
+    int _transientRetryCount = 0;
+    qint64 _bytesAtLastAttempt = -1;
+    bool _abortRequested = false;
+
     QElapsedTimer _stopwatch;
 };
 }
