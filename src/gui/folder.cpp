@@ -1155,10 +1155,23 @@ void Folder::slotNewBigFolderDiscovered(const QString &newF, bool isExternal)
         : tr("A new folder larger than %1 MB has been added: %2").arg(QString::number(limit.second), newFolder);
     ocApp()->gui()->slotShowOptionalTrayMessage(Theme::instance()->appNameGUI(), message);
 
-    // ask right away so the common case needs no trip to the selective sync settings
+    // ask directly, but one folder at a time - a sync can discover many at once
+    _pendingBigFolderPrompts.append({newFolder, isExternal});
+    showNextBigFolderPrompt();
+}
+
+void Folder::showNextBigFolderPrompt()
+{
+    if (_bigFolderPromptActive || _pendingBigFolderPrompts.isEmpty()) {
+        return;
+    }
+    _bigFolderPromptActive = true;
+    const auto prompt = _pendingBigFolderPrompts.takeFirst();
+    const auto limit = ConfigFile().newBigFolderSizeLimit();
+
     QMessageBox *msgBox = new QMessageBox(QMessageBox::Question, Theme::instance()->appNameGUI(),
-        (isExternal ? tr("The folder %1 was added on the server from an external storage.").arg(newFolder)
-                    : tr("The new folder %1 on the server is larger than %2 MB.").arg(newFolder, QString::number(limit.second)))
+        (prompt.isExternal ? tr("The folder %1 was added on the server from an external storage.").arg(prompt.path)
+                           : tr("The new folder %1 on the server is larger than %2 MB.").arg(prompt.path, QString::number(limit.second)))
             + QStringLiteral("\n\n") + tr("Do you want to synchronize it to this computer?"),
         QMessageBox::NoButton, ocApp()->gui()->settingsDialog());
     msgBox->setObjectName("confirmNewBigFolderDialog");
@@ -1167,8 +1180,10 @@ void Folder::slotNewBigFolderDiscovered(const QString &newF, bool isExternal)
     QPushButton *skipButton = msgBox->addButton(tr("Do not synchronize"), QMessageBox::NoRole);
     skipButton->setObjectName("skipNewBigFolderButton");
     msgBox->setAttribute(Qt::WA_DeleteOnClose);
-    connect(msgBox, &QMessageBox::finished, this, [this, msgBox, syncButton, newFolder] {
-        setNewBigFolderApproval(newFolder, msgBox->clickedButton() == syncButton);
+    connect(msgBox, &QMessageBox::finished, this, [this, msgBox, syncButton, path = prompt.path] {
+        setNewBigFolderApproval(path, msgBox->clickedButton() == syncButton);
+        _bigFolderPromptActive = false;
+        showNextBigFolderPrompt();
     });
     ownCloudGui::raise();
     msgBox->open();

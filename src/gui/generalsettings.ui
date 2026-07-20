@@ -193,7 +193,7 @@
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_7">
           <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_6">
+           <layout class="QHBoxLayout" name="horizontalLayoutApproveSync">
             <item>
              <widget class="QCheckBox" name="newFolderLimitCheckBox">
               <property name="text">

@@ -77,6 +77,15 @@ bool DiscoveryPhase::isInSelectiveSyncBlackList(const QString &path) const
 
 void DiscoveryPhase::checkSelectiveSyncNewFolder(const QString &path, RemotePermissions remotePerm, const std::function<void(bool)> &callback)
 {
+    if (!_account) {
+        return callback(false);
+    }
+    // The whitelist has to win over everything else: an approved folder (also an
+    // approved external storage) must never be re-announced, else approving it
+    // would have no effect and the question would come back every sync run.
+    if (findPathInList(_selectiveSyncWhiteList, path)) {
+        return callback(false);
+    }
     if (_syncOptions._confirmExternalStorage && _syncOptions._vfs->mode() == Vfs::Off
         && remotePerm.hasPermission(RemotePermissions::IsMounted)) {
         // external storage mount point: always ask, regardless of size
@@ -85,10 +94,6 @@ void DiscoveryPhase::checkSelectiveSyncNewFolder(const QString &path, RemotePerm
     }
     if (_syncOptions._newBigFolderSizeLimit < 0) {
         // no limit configured, everything is allowed
-        return callback(false);
-    }
-    if (findPathInList(_selectiveSyncWhiteList, path)) {
-        // the folder (or a parent) was already approved
         return callback(false);
     }
 
