@@ -19,6 +19,7 @@ Unicode true
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
+!include "LogicLib.nsh"
 
 !ifndef VERSION
   !define VERSION "0.0.0"
@@ -30,6 +31,11 @@ RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 BrandingText "BW-Tech GmbH - owncloud.online"
 
+; Default matches the embedded installer's default. A different path can be
+; chosen on the directory page, or passed as /D=... (must be the last
+; parameter, unquoted) - it is forwarded to the embedded installer.
+InstallDir "$PROGRAMFILES64\ownCloud"
+
 !define CLIENT_PROCESS "owncloud.online.exe"
 
 !define MUI_ICON "..\..\src\resources\theme\universal\owncloud-online.ico"
@@ -37,11 +43,31 @@ BrandingText "BW-Tech GmbH - owncloud.online"
 ; The finish page shows the reboot-now/-later choice because the install
 ; section sets the reboot flag.
 !define MUI_FINISHPAGE_TEXT_REBOOT "Um die Installation abzuschliessen, muss Windows neu gestartet werden, damit die Explorer-Integration korrekt funktioniert.$\r$\n$\r$\nTo complete the installation, Windows must be restarted so that the Explorer integration works correctly."
+!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 
 !insertmacro MUI_LANGUAGE "German"
 !insertmacro MUI_LANGUAGE "English"
+
+Var ClientExe
+
+; in: $2 = candidate install dir. out: $ClientExe = full path of the client
+; binary, or "" if none found. Newest layout first (7.5.x installs
+; bin\owncloud.online.exe), older/upstream layouts as fallback.
+Function FindClientExe
+  ${If} ${FileExists} "$2\bin\owncloud.online.exe"
+    StrCpy $ClientExe "$2\bin\owncloud.online.exe"
+  ${ElseIf} ${FileExists} "$2\owncloud.online.exe"
+    StrCpy $ClientExe "$2\owncloud.online.exe"
+  ${ElseIf} ${FileExists} "$2\bin\owncloud.exe"
+    StrCpy $ClientExe "$2\bin\owncloud.exe"
+  ${ElseIf} ${FileExists} "$2\owncloud.exe"
+    StrCpy $ClientExe "$2\owncloud.exe"
+  ${Else}
+    StrCpy $ClientExe ""
+  ${EndIf}
+FunctionEnd
 
 Section "Install"
   SetDetailsPrint both
@@ -56,8 +82,9 @@ Section "Install"
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
   File "/oname=client-setup.exe" "${SOURCE_EXE}"
-  DetailPrint "Installiere owncloud.online Client ${VERSION} / installing ..."
-  ExecWait '"$PLUGINSDIR\client-setup.exe" /S' $0
+  DetailPrint "Installiere owncloud.online Client ${VERSION} nach $INSTDIR / installing ..."
+  ; forward the chosen install dir; /D= must be last and unquoted (NSIS rule)
+  ExecWait '"$PLUGINSDIR\client-setup.exe" /S /D=$INSTDIR' $0
   DetailPrint "Installer exit code: $0"
   IntCmp $0 0 installOk
     SetDetailsPrint both
@@ -65,52 +92,67 @@ Section "Install"
     Abort "Installation fehlgeschlagen / installation failed (exit code $0)."
   installOk:
 
-  ; ---- Repair the Start menu shortcut -------------------------------------
-  ; The embedded installer hardcodes its shortcut to "$INSTDIR\bin\owncloud.exe"
-  ; (the upstream binary name), but this client's binary is
-  ; "bin\owncloud.online.exe": the created "ownCloud" entry has a dead target,
-  ; shows no icon and does not start (broken upstream since client 5.7.x).
+  ; ---- Repair the shortcuts -----------------------------------------------
+  ; The embedded installer hardcodes its Start menu shortcut to
+  ; "$INSTDIR\bin\owncloud.exe" (the upstream binary name) and creates no
+  ; desktop shortcut. Depending on the client generation the real binary is
+  ; bin\owncloud.online.exe (current), owncloud.online.exe or owncloud.exe:
+  ; find it and create correctly branded, working shortcuts.
 
-  ; locate the install directory via the uninstall entry the installer writes
-  ReadRegStr $1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "UninstallString"
-  StrCmp $1 "" 0 haveUninstallString
-    SetRegView 64
+  StrCpy $2 "$INSTDIR" ; the dir we just forwarded to the embedded installer
+  Call FindClientExe
+  ${If} $ClientExe == ""
+    ; fallback: resolve the install dir from the uninstall entry
     ReadRegStr $1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "UninstallString"
-    SetRegView 32
-  haveUninstallString:
-  StrCmp $1 "" useDefaultDir
-    StrCpy $2 $1 1
-    StrCmp $2 '"' 0 +2
-      StrCpy $1 $1 -1 1 ; strip the surrounding quotes
-    ${GetParent} $1 $2 ; $2 = install directory
-    Goto haveInstallDir
-  useDefaultDir:
-    StrCpy $2 "$PROGRAMFILES64\ownCloud"
-  haveInstallDir:
-  DetailPrint "Installationsverzeichnis / install dir: $2"
+    ${If} $1 == ""
+      SetRegView 64
+      ReadRegStr $1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "UninstallString"
+      SetRegView 32
+    ${EndIf}
+    ${If} $1 != ""
+      StrCpy $4 $1 1
+      ${If} $4 == '"'
+        StrCpy $1 $1 -1 1 ; strip the surrounding quotes
+      ${EndIf}
+      ${GetParent} $1 $2
+      Call FindClientExe
+    ${EndIf}
+  ${EndIf}
 
-  IfFileExists "$2\bin\owncloud.online.exe" 0 shortcutDone
+  ${If} $ClientExe != ""
+    DetailPrint "Client-Programmdatei / client binary: $ClientExe"
     ; remove the broken upstream-named shortcuts, in both shell contexts and
-    ; both possible locations (top level and start menu folder)
+    ; the possible locations (top level and start menu folder)
     SetShellVarContext all
     Delete "$SMPROGRAMS\ownCloud.lnk"
     Delete "$SMPROGRAMS\ownCloud\ownCloud.lnk"
     RMDir "$SMPROGRAMS\ownCloud"
     Delete "$SMPROGRAMS\ownCloud Desktop Client\ownCloud.lnk"
     RMDir "$SMPROGRAMS\ownCloud Desktop Client"
+    Delete "$DESKTOP\ownCloud.lnk"
     SetShellVarContext current
     Delete "$SMPROGRAMS\ownCloud.lnk"
     Delete "$SMPROGRAMS\ownCloud\ownCloud.lnk"
     RMDir "$SMPROGRAMS\ownCloud"
     Delete "$SMPROGRAMS\ownCloud Desktop Client\ownCloud.lnk"
     RMDir "$SMPROGRAMS\ownCloud Desktop Client"
-    ; create the correctly branded, working shortcut for all users; the
-    ; installer places the branded icon at $INSTDIR\owncloud.ico
+    Delete "$DESKTOP\ownCloud.lnk"
+    ; branded icon if the installer shipped it, else the binary's own icon
+    ${If} ${FileExists} "$2\owncloud.ico"
+      StrCpy $5 "$2\owncloud.ico"
+    ${Else}
+      StrCpy $5 "$ClientExe"
+    ${EndIf}
+    ; create the branded, working shortcuts for all users
     SetShellVarContext all
-    SetOutPath "$2\bin" ; becomes the shortcut's working directory
-    CreateShortCut "$SMPROGRAMS\owncloud.online.lnk" "$2\bin\owncloud.online.exe" "" "$2\owncloud.ico"
-    DetailPrint "Startmenue-Eintrag repariert / start menu shortcut fixed."
-  shortcutDone:
+    ${GetParent} $ClientExe $4
+    SetOutPath "$4" ; becomes the shortcuts' working directory
+    CreateShortCut "$SMPROGRAMS\owncloud.online.lnk" "$ClientExe" "" "$5"
+    CreateShortCut "$DESKTOP\owncloud.online.lnk" "$ClientExe" "" "$5"
+    DetailPrint "Startmenue- und Desktop-Verknuepfung erstellt / start menu and desktop shortcuts created."
+  ${Else}
+    DetailPrint "Client-Programmdatei nicht gefunden / client binary not found - shortcuts unchanged."
+  ${EndIf}
   ; --------------------------------------------------------------------------
 
   ; The Explorer integration only loads reliably after a restart.
