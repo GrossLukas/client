@@ -202,6 +202,12 @@ void maybePromptWindowsRestartAfterInstall(OCC::Application *app)
     if (cfg.rebootPromptedForVersion() == currentVersion) {
         return;
     }
+    // Windows was restarted only minutes ago (e.g. by the setup wrapper or by the
+    // user right after installing): the installation is complete, just record it.
+    if (GetTickCount64() < 30ull * 60ull * 1000ull) {
+        cfg.setRebootPromptedForVersion(currentVersion);
+        return;
+    }
     // Don't interrupt the very first setup: the account wizard is running. The
     // marker stays unset, so the prompt comes up on the next start instead.
     if (AccountManager::instance()->accounts().isEmpty()) {

@@ -41,6 +41,7 @@ jobs:
           cd assets
           for f in *; do
             case "$f" in
+              *-Setup.exe) mv "$f" "owncloud.online-client-${VER}-win-x64-Setup.exe" ;;
               *.exe)      mv "$f" "owncloud.online-client-${VER}-win-x64.exe" ;;
               *.7z)       mv "$f" "owncloud.online-client-${VER}-win-x64.7z" ;;
               *.AppImage) mv "$f" "owncloud.online-client-${VER}-linux-x86_64.AppImage" ;;
@@ -53,19 +54,21 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ inputs.tag }}"
-          cat > notes.md <<'EOF'
-          **Feature-Release: Datei-Browser direkt in der Ordnerliste**
+          VER="${TAG#v}"
+          cat > notes.md <<EOF
+          Release ${VER} des owncloud.online Desktop-Clients.
 
-          Die Remote-Dateistruktur lässt sich jetzt direkt in der App durchsuchen: Jede Sync-Verbindung ist aufklappbar, Unterordner werden live vom Server geladen (mit Größen) und sind beliebig tief expandierbar.
+          **Pakete**
+          - \`owncloud.online-client-${VER}-win-x64-Setup.exe\` — **empfohlener Windows-Installer**: beendet einen laufenden Client, installiert und führt den für die Explorer-Integration nötigen Windows-Neustart aus. Silent: \`/S\` (startet automatisch neu), Neustart unterdrücken: \`/S /norestart\` (z. B. für baramundi-Jobs mit eigener Reboot-Steuerung).
+          - \`owncloud.online-client-${VER}-win-x64.exe\` — Basis-Installer ohne Neustart-Logik
+          - \`owncloud.online-client-${VER}-win-x64.7z\` — Windows portabel
+          - \`owncloud.online-client-${VER}-linux-x86_64.AppImage\` — Linux
+          - \`SHA256SUMS.txt\` — Prüfsummen aller Pakete
 
-          - Ohne virtuelle Dateien: Selective-Sync-Checkboxen direkt im Baum, Übernahme über die Apply/Discard-Leiste (abgewählte Ordner werden lokal entfernt, Warnung inklusive)
-          - Mit virtuellen Dateien (Windows): Verfügbarkeit pro Ordner sichtbar, Pin-Status per Rechtsklick (Immer behalten / Speicherplatz freigeben / Zurücksetzen)
-          - Gehärtet durch adversarielles Review (15 Funde behoben, u. a. Delta-Merge der Selective-Sync-Blacklist gegen konkurrierende Journal-Änderungen)
-
-          Pakete: Windows-Installer und portables 7z (x64, MSVC 2022) sowie Linux AppImage (x86_64). macOS ist in dieser Version kein Release-Target (FileProvider-VFS in Arbeit).
+          Änderungsdetails: siehe \`changelog/\` im Repository. macOS ist derzeit kein Release-Target (FileProvider-VFS in Arbeit).
           EOF
           gh release create "$TAG" -R "$GITHUB_REPOSITORY" \
             --target master \
-            --title "owncloud.online Client ${TAG#v}" \
+            --title "owncloud.online Client ${VER}" \
             --notes-file notes.md \
             assets/*
