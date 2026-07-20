@@ -172,6 +172,12 @@ static SyncJournalErrorBlacklistRecord createBlacklistEntry(
     } else if (item._httpErrorCode == 413 || item._httpErrorCode == 415) {
         qCWarning(lcPropagator) << "Fatal Error condition" << item._httpErrorCode << ", maximum blacklist ignore time!";
         entry._ignoreDuration = maxBlacklistTime;
+    } else if (item._direction == SyncFileItem::Down
+        && (item._httpErrorCode == 0 || item._httpErrorCode >= 500)) {
+        // Interrupted downloads resume from the partial temp file: retry them
+        // quickly instead of exponentially backing off for hours, so a large
+        // download keeps inching forward until it completes.
+        entry._ignoreDuration = qMin(entry._ignoreDuration, qint64(60));
     }
 
     entry._ignoreDuration = qBound(minBlacklistTime, entry._ignoreDuration, maxBlacklistTime);
