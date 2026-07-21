@@ -21,6 +21,9 @@ ToolButton {
     readonly property real goldenRatio: 1.618
     readonly property real widthHint: height * goldenRatio
 
+    // owncloud.online brand turquoise (matches the app icon)
+    readonly property color brandAccent: "#00e2bb"
+
     property string altText: ""
     property int gradient: Gradient.AfricanField
     property color solidColor: null
@@ -31,9 +34,22 @@ ToolButton {
     icon.width: 32
     implicitWidth: Math.min(implicitContentWidth + leftPadding + rightPadding, widthHint)
 
-    // make the current button pop
-    // don't get highlight from our own palette else we create a binding loop
-    palette.button: parent.palette.highlight
+    // make the current button pop - a translucent brand tint stays readable
+    // on both the light and the dark palette
+    palette.button: Qt.rgba(brandAccent.r, brandAccent.g, brandAccent.b, 0.22)
+
+    // clean brand accent: underline the active tab
+    Rectangle {
+        visible: control.checked
+        color: control.brandAccent
+        height: 3
+        radius: 1
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: 8
+        anchors.rightMargin: 8
+    }
 
     Component {
         id: imageComponent

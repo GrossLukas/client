@@ -46,8 +46,8 @@ ButtonDelegate::ButtonDelegate(const QString &text, QAbstractItemView *parent)
 void ButtonDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     QStyleOptionViewItem opt(option);
-    QStyleOptionButton buttonStyle;
-    opt.palette.setColor(QPalette::Highlight, buttonStyle.palette.color(QPalette::Highlight));
+    // same translucent brand-turquoise selection as the folder rows
+    opt.palette.setColor(QPalette::Highlight, QColor(0x00, 0xe2, 0xbb, 64));
     drawBackground(painter, opt, index);
 
     painter->save();
