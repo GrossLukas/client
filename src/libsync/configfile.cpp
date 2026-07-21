@@ -91,6 +91,7 @@ const QString useNewBigFolderSizeLimitC() { return QStringLiteral("useNewBigFold
 const QString confirmExternalStorageC() { return QStringLiteral("confirmExternalStorage"); }
 // version marker for the Windows post-install/update restart prompt
 const QString rebootPromptedForVersionC() { return QStringLiteral("rebootPromptedForVersion"); }
+const QString showInExplorerNavigationPaneC() { return QStringLiteral("showInExplorerNavigationPane"); }
 const QString enableHttp2C() { return QStringLiteral("enableHttp2"); }
 const QString useUploadLimitC() { return QStringLiteral("useUploadLimit"); }
 const QString uploadLimitC() { return QStringLiteral("uploadLimit"); }
@@ -563,6 +564,16 @@ QString ConfigFile::rebootPromptedForVersion() const
 void ConfigFile::setRebootPromptedForVersion(const QString &version)
 {
     setValue(rebootPromptedForVersionC(), version);
+}
+
+bool ConfigFile::showInExplorerNavigationPane() const
+{
+    return getValue(showInExplorerNavigationPaneC(), QString(), true).toBool();
+}
+
+void ConfigFile::setShowInExplorerNavigationPane(bool show)
+{
+    setValue(showInExplorerNavigationPaneC(), show);
 }
 
 bool ConfigFile::enableHttp2() const

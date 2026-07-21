@@ -35,6 +35,7 @@ class Application;
 class SyncResult;
 class SocketApi;
 class LockWatcher;
+class NavigationPaneHelper;
 
 /**
  * @brief Return object for Folder::trayOverallStatus.
@@ -230,6 +231,9 @@ public:
     static bool ensureFilesystemSupported(const FolderDefinition &folderDefinition);
 
     SocketApi *socketApi();
+
+    /** Manages the Windows Explorer navigation-pane pins for classic sync folders. */
+    NavigationPaneHelper &navigationPaneHelper() { return *_navigationPaneHelper; }
 
     /**
      * Attempts to find a non-existing, acceptable path for creating a new sync folder.
@@ -488,6 +492,8 @@ private:
     SyncScheduler *_scheduler;
 
     std::unique_ptr<SocketApi> _socketApi;
+
+    std::unique_ptr<NavigationPaneHelper> _navigationPaneHelper;
 
     mutable QMap<QString, Result<void, QString>> _unsupportedConfigurationError;
 

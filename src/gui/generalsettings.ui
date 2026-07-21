@@ -187,6 +187,13 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="showInExplorerNavPaneCheckBox">
+         <property name="text">
+          <string>Show sync folders in the Explorer navigation pane</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QGroupBox" name="approveSyncGroupBox">
          <property name="title">
           <string>Advanced - Approve folder sync (non-virtual files mode only)</string>
