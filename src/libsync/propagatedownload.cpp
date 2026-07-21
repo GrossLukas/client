@@ -52,9 +52,11 @@ namespace {
 
     // Consecutive ZERO-PROGRESS resume attempts before the transfer is handed to
     // the normal error handling. Attempts that received data don't count: a large
-    // download that keeps moving is resumed in-run indefinitely. (Counterpart of
-    // the transient-retry logic in propagateuploadng.cpp.)
-    constexpr int maxStalledRetries = 10;
+    // download that keeps moving is resumed in-run indefinitely. Zero-progress
+    // attempts hand over quickly - the short download blacklist backoff makes the
+    // next sync run resume the partial file soon anyway. (Counterpart of the
+    // transient-retry logic in propagateuploadng.cpp.)
+    constexpr int maxStalledRetries = 3;
 
     std::chrono::milliseconds downloadRetryDelay(int attempt)
     {
@@ -751,10 +753,31 @@ void PropagateDownloadFile::slotGetFinished()
         // eventually hand over to the normal error handling.
         const bool userAborted = _abortRequested
             || (err == QNetworkReply::OperationCanceledError && !job->timedOut());
-        if (!userAborted && !badRangeHeader && !fileNotFound
+
+        // An HTTP error reply (4xx/5xx) - as opposed to a dropped, stalled or
+        // timed-out connection - is only worth an immediate in-run retry when
+        // partial data exists that a resume can build on. Without partial data
+        // the regular error handling (with its short blacklist backoff for
+        // resumable downloads) takes over, which keeps a persistently failing
+        // server from being hammered.
+        const qint64 bytesSoFar = _tmpFile.exists() ? _tmpFile.size() : 0;
+        const bool gotHttpErrorReply = _item->_httpErrorCode >= 400;
+
+        // Server maintenance mode must never be retried in-run: it has to
+        // abort the whole sync so the server isn't flooded with requests
+        // (same detection as in classifyError()). peek() keeps the body
+        // available for errorStringParsingBody() below.
+        bool serverMaintenance = false;
+        if (_item->_httpErrorCode == 503) {
+            const QByteArray probe = job->reply()->peek(128 * 1024);
+            serverMaintenance = probe.contains(R"(>Sabre\DAV\Exception\ServiceUnavailable<)")
+                && !probe.contains("Storage is temporarily not available");
+        }
+
+        if (!userAborted && !badRangeHeader && !fileNotFound && !serverMaintenance
+            && (!gotHttpErrorReply || bytesSoFar > 0)
             && _item->_directDownloadUrl.isEmpty()
             && isTransientDownloadError(err, _item->_httpErrorCode)) {
-            const qint64 bytesSoFar = _tmpFile.exists() ? _tmpFile.size() : 0;
             if (bytesSoFar > _bytesAtLastAttempt) {
                 _transientRetryCount = 0; // progress was made - keep going
             } else {
