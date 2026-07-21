@@ -26,6 +26,7 @@
 #include "guiutility.h"
 #include "libsync/syncengine.h"
 #include "lockwatcher.h"
+#include "navigationpanehelper.h"
 #include "scheduling/syncscheduler.h"
 #include "socketapi/socketapi.h"
 #include "spacesmanager.h"
@@ -94,6 +95,7 @@ FolderMan::FolderMan()
     : _lockWatcher(new LockWatcher)
     , _scheduler(new SyncScheduler(this))
     , _socketApi(new SocketApi)
+    , _navigationPaneHelper(std::make_unique<NavigationPaneHelper>(this))
 {
     auto settings = ConfigFile::makeQSettings();
     if (settings.contains(IgnoreHiddenFilesKey)) {

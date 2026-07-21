@@ -16,8 +16,11 @@
 #include "ui_generalsettings.h"
 
 #include "common/restartmanager.h"
+#include "common/utility.h"
 #include "common/version.h"
 #include "gui/application.h"
+#include "gui/folderman.h"
+#include "gui/navigationpanehelper.h"
 #include "gui/ignorelisteditor.h"
 #include "gui/settingsdialog.h"
 #include "gui/translations.h"
@@ -75,6 +78,12 @@ GeneralSettings::GeneralSettings(QWidget *parent)
         Q_EMIT syncOptionsChanged();
     });
 
+    // Explorer navigation-pane pin for classic sync folders (Windows only)
+    _ui->showInExplorerNavPaneCheckBox->setVisible(Utility::isWindows());
+    connect(_ui->showInExplorerNavPaneCheckBox, &QCheckBox::toggled, this, [](bool checked) {
+        FolderMan::instance()->navigationPaneHelper().setShowInExplorerNavigationPane(checked);
+    });
+
     // folder sync approval (only effective while virtual files are off)
     connect(_ui->newFolderLimitCheckBox, &QCheckBox::toggled, this, [this](bool checked) {
         _ui->newFolderLimitSpinBox->setEnabled(checked);
@@ -115,6 +124,8 @@ void GeneralSettings::loadMiscSettings()
     _ui->monoIconsCheckBox->setChecked(cfgFile.monoIcons());
     _ui->showWindowOnStartCheckBox->setChecked(cfgFile.showMainDialogOnStartup());
     _ui->enableHttp2CheckBox->setChecked(cfgFile.enableHttp2());
+
+    _ui->showInExplorerNavPaneCheckBox->setChecked(cfgFile.showInExplorerNavigationPane());
 
     const auto newBigFolderSizeLimit = cfgFile.newBigFolderSizeLimit();
     _ui->newFolderLimitCheckBox->setChecked(newBigFolderSizeLimit.first);

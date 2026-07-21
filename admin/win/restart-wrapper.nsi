@@ -150,6 +150,35 @@ Section "Install"
     CreateShortCut "$SMPROGRAMS\owncloud.online.lnk" "$ClientExe" "" "$5"
     CreateShortCut "$DESKTOP\owncloud.online.lnk" "$ClientExe" "" "$5"
     DetailPrint "Startmenue- und Desktop-Verknuepfung erstellt / start menu and desktop shortcuts created."
+
+    ; ---- Register the Explorer shell integration --------------------------
+    ; The embedded installer ships OCOverlays.dll and OCContextMenu.dll next
+    ; to the client binary but never registers them, so Explorer shows
+    ; neither overlay icons nor the context menu. Their DllRegisterServer
+    ; writes all required registry entries (CLSIDs and the
+    ; ShellIconOverlayIdentifiers keys, HKLM 64-bit view). The DLLs are
+    ; 64-bit, so use the 64-bit regsvr32: from this 32-bit installer process
+    ; that is $WINDIR\SysNative; fall back to $SYSDIR just in case.
+    StrCpy $6 "$WINDIR\SysNative\regsvr32.exe"
+    ${IfNot} ${FileExists} "$6"
+      StrCpy $6 "$SYSDIR\regsvr32.exe"
+    ${EndIf}
+    ${If} ${FileExists} "$4\OCOverlays.dll"
+      DetailPrint "Registriere Explorer-Overlay-Symbole / registering overlay icons ..."
+      nsExec::ExecToLog '"$6" /s "$4\OCOverlays.dll"'
+      Pop $0
+      DetailPrint "OCOverlays.dll: regsvr32 exit code $0"
+    ${Else}
+      DetailPrint "OCOverlays.dll nicht gefunden / not found in $4 - overlays skipped."
+    ${EndIf}
+    ${If} ${FileExists} "$4\OCContextMenu.dll"
+      DetailPrint "Registriere Explorer-Kontextmenue / registering context menu ..."
+      nsExec::ExecToLog '"$6" /s "$4\OCContextMenu.dll"'
+      Pop $0
+      DetailPrint "OCContextMenu.dll: regsvr32 exit code $0"
+    ${Else}
+      DetailPrint "OCContextMenu.dll nicht gefunden / not found in $4 - context menu skipped."
+    ${EndIf}
   ${Else}
     DetailPrint "Client-Programmdatei nicht gefunden / client binary not found - shortcuts unchanged."
   ${EndIf}

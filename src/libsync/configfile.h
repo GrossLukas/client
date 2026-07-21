@@ -147,6 +147,10 @@ public:
     QString rebootPromptedForVersion() const;
     void setRebootPromptedForVersion(const QString &version);
 
+    /** Pin classic (non-VFS) sync folders to the Windows Explorer navigation pane */
+    bool showInExplorerNavigationPane() const;
+    void setShowInExplorerNavigationPane(bool show);
+
     /** Allow HTTP/2 for HTTPS connections. Opt-in/experimental, off by default;
         toggling takes effect after a restart. */
     bool enableHttp2() const;

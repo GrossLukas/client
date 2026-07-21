@@ -35,6 +35,7 @@ set(client_SRCS
     ignorelisteditor.cpp
     lockwatcher.cpp
     logbrowser.cpp
+    navigationpanehelper.cpp
     networkinformation.cpp
     networksettings.cpp
     openfilemanager.cpp
