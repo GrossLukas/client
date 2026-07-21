@@ -116,9 +116,10 @@ void AccountFoldersView::buildView()
     // because we can always grab the true current color on paint.
     // TODO: #60 - if we really need to implement full palettes for both light and dark mode, my rec would be to use a QStyle sub but will
     // make a decision when the time comes.
-    QStyleOptionButton buttonStyle;
     QPalette treePalette = _treeView->palette();
-    treePalette.setColor(QPalette::Highlight, buttonStyle.palette.color(QPalette::Highlight));
+    // owncloud.online brand: keep the indent area consistent with the
+    // translucent turquoise selection painted by the item delegates
+    treePalette.setColor(QPalette::Highlight, QColor(0x00, 0xe2, 0xbb, 64));
     _treeView->setPalette(treePalette);
 
 

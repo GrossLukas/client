@@ -389,12 +389,15 @@ QIcon Theme::wizardFooterLogo() const
 
 QColor Theme::avatarColor() const
 {
-    return {};
+    // owncloud.online brand: resting account chips use a calmer teal so the
+    // active account (avatarColorChecked, the full brand turquoise) stands out.
+    return QColor(0x00, 0xb6, 0x97);
 }
 
 QColor Theme::avatarColorChecked() const
 {
-    return {};
+    // owncloud.online brand turquoise (matches the app icon)
+    return QColor(0x00, 0xe2, 0xbb);
 }
 
 QString Theme::webDavPath() const

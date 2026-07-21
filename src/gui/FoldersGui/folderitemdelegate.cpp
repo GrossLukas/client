@@ -59,8 +59,9 @@ void FolderItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &op
      opt.rect.setX(opt.rect.X() - treeIndent);
 */
 
-    QStyleOptionButton buttonStyle;
-    opt.palette.setColor(QPalette::Highlight, buttonStyle.palette.color(QPalette::Highlight));
+    // owncloud.online brand: a translucent turquoise selection reads well on
+    // both the light and the dark palette (the row text keeps its normal color)
+    opt.palette.setColor(QPalette::Highlight, QColor(0x00, 0xe2, 0xbb, 64));
     drawBackground(painter, opt, index);
 
     // calculate the line heights using current font - yes again, as we can't "store" the sizes calculated in sizeHint :/
@@ -129,8 +130,8 @@ void FolderItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &op
 void FolderItemDelegate::paintError(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     QStyleOptionViewItem rowOpt(option);
-    QStyleOptionButton buttonStyle;
-    rowOpt.palette.setColor(QPalette::Highlight, buttonStyle.palette.color(QPalette::Highlight));
+    // same translucent brand-turquoise selection as the other rows
+    rowOpt.palette.setColor(QPalette::Highlight, QColor(0x00, 0xe2, 0xbb, 64));
 
 
     // this allows painting over the indent area which may be incorrect color after switching dark/light mode
@@ -242,8 +243,8 @@ QRect FolderItemDelegate::browserCheckRect(const QStyleOptionViewItem &option) c
 void FolderItemDelegate::paintBrowserRow(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     QStyleOptionViewItem opt(option);
-    QStyleOptionButton buttonStyle;
-    opt.palette.setColor(QPalette::Highlight, buttonStyle.palette.color(QPalette::Highlight));
+    // same translucent brand-turquoise selection as the top-level rows
+    opt.palette.setColor(QPalette::Highlight, QColor(0x00, 0xe2, 0xbb, 64));
     // note: unlike the error rows we must not paint over the indent area here because the
     // browser rows have expanders of their own, which live in that area
     drawBackground(painter, opt, index);
