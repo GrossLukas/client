@@ -56,6 +56,11 @@ public:
 
     QNetworkReply *reply() const;
 
+    /** Whether reply() may be called: the reply is a QPointer that goes null
+     *  once the network reply is destroyed (reply() asserts on null). Queued
+     *  invocations - e.g. the bandwidth manager's wakeups - must check this. */
+    bool hasReply() const { return !_reply.isNull(); }
+
     void setForceIgnoreCredentialFailure(bool ignore);
     bool ignoreCredentialFailure() const;
 

@@ -394,7 +394,14 @@ void GETFileJob::giveBandwidthQuota(qint64 q)
 
 void GETFileJob::slotReadyRead()
 {
-    Q_ASSERT(reply());
+    // The bandwidth manager wakes jobs up through the event queue (setChoked /
+    // giveBandwidthQuota use queued invocations) and its 1-second quota timer
+    // fires for every registered job. Such a wakeup can arrive after the reply
+    // is already gone - with QT_FORCE_ASSERTS the old Q_ASSERT(reply()) then
+    // crashed the client as soon as a bandwidth limit was active.
+    if (!hasReply()) {
+        return;
+    }
     if (!_httpOk) {
         return;
     }
