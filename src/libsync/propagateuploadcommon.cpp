@@ -286,11 +286,14 @@ void PropagateUploadCommon::commonErrorHandling(AbstractNetworkJob *job)
 
 void PropagateUploadCommon::adjustLastJobTimeout(AbstractNetworkJob *job, qint64 fileSize)
 {
-    // Calculate 3 minutes for each gigabyte of data
-    const auto timeout = std::chrono::minutes(static_cast<quint64>((3min).count() * fileSize / 1e9));
-    // Maximum of 30 minutes
+    // Calculate 3 minutes for each gigabyte of data, capped at 60 minutes.
+    // The cap must CLAMP, not discard: the old `timeout < 30min` guard silently
+    // kept the 5-minute default for files of 10 GB and more - exactly the files
+    // whose final chunk-assembly MOVE takes the longest on the server.
+    const auto timeout = qMin(std::chrono::minutes(static_cast<quint64>((3min).count() * fileSize / 1e9)),
+        std::chrono::minutes(60min));
     // not less than the default/current val
-    if (timeout > job->timeoutSec() && timeout < 30min) {
+    if (timeout > job->timeoutSec()) {
         job->setTimeout(timeout);
     }
 }
