@@ -152,6 +152,10 @@ void NavigationPaneHelper::updateCloudStorageRegistry()
 
     // (Re-)create the wanted entries. Overwriting existing values is fine and
     // keeps titles/paths current after folder moves or renames.
+    // note: materialized as QString up front - a QStringBuilder expression is
+    // not implicitly convertible to the QVariant that setValue() takes (MSVC)
+    const QString shell32Path =
+        qEnvironmentVariable("systemroot") + QStringLiteral("\\system32\\shell32.dll");
     for (const Entry &entry : desired) {
         qCInfo(lcNavPane) << "Pinning" << entry.path << "to the navigation pane as" << entry.title;
 
@@ -159,8 +163,7 @@ void NavigationPaneHelper::updateCloudStorageRegistry()
         clsid.setValue(QStringLiteral("."), entry.title);
         clsid.setValue(QStringLiteral("ApplicationName"), appName);
         clsid.setValue(QStringLiteral("DefaultIcon/."), iconPath);
-        clsid.setValue(QStringLiteral("InProcServer32/."),
-            qEnvironmentVariable("systemroot") + QStringLiteral("\\system32\\shell32.dll"));
+        clsid.setValue(QStringLiteral("InProcServer32/."), shell32Path);
         clsid.setValue(QStringLiteral("Instance/CLSID"), delegateFolderClsid);
         clsid.setValue(QStringLiteral("Instance/InitPropertyBag/Attributes"), quint32(0x11));
         clsid.setValue(QStringLiteral("Instance/InitPropertyBag/TargetFolderPath"), entry.path);
