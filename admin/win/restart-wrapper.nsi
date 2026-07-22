@@ -93,6 +93,8 @@ Section "Install"
   ; its target directory - it is the same mechanism its own upgrades use.
   ; (This wrapper is a 32-bit process, so a plain HKLM write lands in the same
   ; WOW6432Node view the embedded installer reads.)
+  ; $8 remembers the previous value so a failed install can restore it.
+  ReadRegStr $8 HKLM "Software\ownCloud GmbH\ownCloud" "Install_Dir"
   WriteRegStr HKLM "Software\ownCloud GmbH\ownCloud" "Install_Dir" "$INSTDIR"
 
   ; Unpack and run the real installer silently.
@@ -106,6 +108,13 @@ Section "Install"
   IntCmp $0 0 installOk
     SetDetailsPrint both
     DetailPrint "Installation fehlgeschlagen / installation failed (exit code $0)."
+    ; restore the previous steering value - whatever installation the machine
+    ; really has still lives where it did before this attempt
+    ${If} $8 != ""
+      WriteRegStr HKLM "Software\ownCloud GmbH\ownCloud" "Install_Dir" "$8"
+    ${Else}
+      DeleteRegValue HKLM "Software\ownCloud GmbH\ownCloud" "Install_Dir"
+    ${EndIf}
     Abort "Installation fehlgeschlagen / installation failed (exit code $0)."
   installOk:
 
@@ -140,17 +149,17 @@ Section "Install"
       nsExec::ExecToLog '"$6" /u /s "${OLD_INSTDIR}\bin\OCContextMenu.dll"'
       Pop $0
     ${EndIf}
-    ; silent uninstall; _?= keeps the uninstaller in place so ExecWait really waits
-    ${If} ${FileExists} "${OLD_INSTDIR}\uninstall.exe"
-      ExecWait '"${OLD_INSTDIR}\uninstall.exe" /S _?=${OLD_INSTDIR}' $0
-      DetailPrint "Alter Uninstaller / old uninstaller exit code: $0"
-    ${EndIf}
-    ; files still locked (e.g. shell DLLs loaded by Explorer) are removed at the
-    ; reboot this installer mandates anyway
+    ; The old uninstaller is deliberately NOT executed: its MultiUser
+    ; un.onInit re-reads the Install_Dir registry value - which now points at
+    ; the NEW installation - and overrides _?= with it, so it would delete
+    ; the client we just installed. Everything it would clean up is covered
+    ; here directly: the files below, the shared registry entries right after.
+    ; Files still locked (e.g. shell DLLs loaded by Explorer) are removed at
+    ; the reboot this installer mandates anyway.
     Delete /REBOOTOK "${OLD_INSTDIR}\uninstall.exe"
     RMDir /r /REBOOTOK "${OLD_INSTDIR}"
-    ; restore the registry entries of the NEW installation (the embedded
-    ; installer generation writes in the default 32-bit view without SetRegView)
+    ; make sure the registry entries describe the NEW installation (the
+    ; embedded installer generation writes in the default 32-bit view)
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayName" "owncloud.online Client ${VERSION}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "UninstallString" '"$INSTDIR\uninstall.exe"'
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayVersion" "${VERSION}"
