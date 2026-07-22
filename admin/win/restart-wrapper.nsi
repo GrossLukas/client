@@ -31,10 +31,14 @@ RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 BrandingText "BW-Tech GmbH - owncloud.online"
 
-; Default matches the embedded installer's default. A different path can be
-; chosen on the directory page, or passed as /D=... (must be the last
-; parameter, unquoted) - it is forwarded to the embedded installer.
-InstallDir "$PROGRAMFILES64\ownCloud"
+; Branded default install directory. A different path can be chosen on the
+; directory page, or passed as /D=... (must be the last parameter, unquoted) -
+; it is forwarded to the embedded installer. An existing installation in the
+; old default directory ($PROGRAMFILES64\ownCloud) is uninstalled first, so
+; upgrades move over cleanly (accounts and sync folders live in the user
+; profile and are not touched by that).
+InstallDir "$PROGRAMFILES64\owncloud.online"
+!define OLD_INSTDIR "$PROGRAMFILES64\ownCloud"
 
 !define CLIENT_PROCESS "owncloud.online.exe"
 
@@ -78,6 +82,20 @@ Section "Install"
   Pop $0
   Sleep 1500
 
+  ; ---- Migrate away from the old default directory --------------------------
+  ; Earlier versions installed to "$PROGRAMFILES64\ownCloud". When such an
+  ; installation exists and a different target is used now, uninstall it first
+  ; (silently, _?= keeps the uninstaller in place so ExecWait really waits),
+  ; otherwise it would linger as an orphan without an uninstall entry.
+  ${If} "$INSTDIR" != "${OLD_INSTDIR}"
+  ${AndIf} ${FileExists} "${OLD_INSTDIR}\uninstall.exe"
+    DetailPrint "Entferne alte Installation in ${OLD_INSTDIR} / removing old installation ..."
+    ExecWait '"${OLD_INSTDIR}\uninstall.exe" /S _?=${OLD_INSTDIR}' $0
+    DetailPrint "Alter Uninstaller / old uninstaller exit code: $0"
+    Delete "${OLD_INSTDIR}\uninstall.exe"
+    RMDir /r "${OLD_INSTDIR}"
+  ${EndIf}
+
   ; Unpack and run the real installer silently.
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
@@ -91,6 +109,26 @@ Section "Install"
     DetailPrint "Installation fehlgeschlagen / installation failed (exit code $0)."
     Abort "Installation fehlgeschlagen / installation failed (exit code $0)."
   installOk:
+
+  ; ---- Rebrand the Apps & Features entry ------------------------------------
+  ; The embedded installer writes its uninstall entry with upstream branding
+  ; ("ownCloud", Publisher "ownCloud GmbH"). Rewrite the user-visible values in
+  ; whichever registry view the entry landed in.
+  DetailPrint "Aktualisiere Programme-und-Features-Eintrag / rebranding uninstall entry ..."
+  ReadRegStr $7 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayName"
+  ${If} $7 != ""
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayName" "owncloud.online Client ${VERSION}"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "Publisher" "BW.Tech GmbH"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "URLInfoAbout" "https://github.com/GrossLukas/client"
+  ${EndIf}
+  SetRegView 64
+  ReadRegStr $7 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayName"
+  ${If} $7 != ""
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayName" "owncloud.online Client ${VERSION}"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "Publisher" "BW.Tech GmbH"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "URLInfoAbout" "https://github.com/GrossLukas/client"
+  ${EndIf}
+  SetRegView 32
 
   ; ---- Repair the shortcuts -----------------------------------------------
   ; The embedded installer hardcodes its Start menu shortcut to
@@ -150,6 +188,18 @@ Section "Install"
     CreateShortCut "$SMPROGRAMS\owncloud.online.lnk" "$ClientExe" "" "$5"
     CreateShortCut "$DESKTOP\owncloud.online.lnk" "$ClientExe" "" "$5"
     DetailPrint "Startmenue- und Desktop-Verknuepfung erstellt / start menu and desktop shortcuts created."
+
+    ; branded icon for the Apps & Features entry too
+    ReadRegStr $7 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayName"
+    ${If} $7 != ""
+      WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayIcon" "$5"
+    ${EndIf}
+    SetRegView 64
+    ReadRegStr $7 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayName"
+    ${If} $7 != ""
+      WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayIcon" "$5"
+    ${EndIf}
+    SetRegView 32
 
     ; ---- Register the Explorer shell integration --------------------------
     ; The embedded installer ships OCOverlays.dll and OCContextMenu.dll next

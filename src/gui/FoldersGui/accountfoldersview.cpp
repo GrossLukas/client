@@ -160,10 +160,6 @@ void AccountFoldersView::buildView()
     _selectiveSyncApplyBar->hide();
     mainLayout->addWidget(_selectiveSyncApplyBar);
 
-    _syncedFolderCountLabel = new QLabel("placeholder for sync count", this);
-    _syncedFolderCountLabel->setObjectName("syncedFolderCount");
-    _syncedFolderCountLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    mainLayout->addWidget(_syncedFolderCountLabel, 0, Qt::AlignLeft);
 
     setLayout(mainLayout);
 }
@@ -285,11 +281,6 @@ void AccountFoldersView::setItemModels(QStandardItemModel *model, QItemSelection
     // ResizeToContents is required to allow the button delegate size hint to work - else it defaults to 100px wide regardless
     // of other settings. On windows the button is much wider, even with this setting.
     header->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-}
-
-void AccountFoldersView::setSyncedFolderCount(int synced, int total)
-{
-    _syncedFolderCountLabel->setText(tr("%1 out of %2 %3 are synchronized").arg(QString::number(synced), QString::number(total), CommonStrings::spaces()));
 }
 
 void AccountFoldersView::enableAddFolder(bool enableAdd)

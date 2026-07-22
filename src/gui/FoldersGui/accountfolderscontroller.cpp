@@ -78,6 +78,7 @@ AccountFoldersController::AccountFoldersController(AccountState *state, AccountF
 
 void AccountFoldersController::onUnsyncedSpaceCountChanged(const QUuid &accountId, int unsyncedSpaceCount, int totalSpaceCount)
 {
+    Q_UNUSED(totalSpaceCount)
     if (accountId != _accountId)
         return;
 
@@ -88,10 +89,6 @@ void AccountFoldersController::onUnsyncedSpaceCountChanged(const QUuid &accountI
     const bool spacesEnabled = _accountState && _accountState->account()
         && _accountState->account()->capabilities().spacesSupport().enabled;
     _view->enableAddFolder(!spacesEnabled || unsyncedSpaceCount > 0);
-    // sometimes we have folders that are related to a space which has been removed server side. Because of this,
-    // sometimes the total "synced" count can be larger than the space count, so min the diff to get something reasonable
-    int reasonableCount = qMin(totalSpaceCount - unsyncedSpaceCount, totalSpaceCount);
-    _view->setSyncedFolderCount(reasonableCount, totalSpaceCount);
 }
 
 void AccountFoldersController::onFolderChanged(OCC::Folder *folder)

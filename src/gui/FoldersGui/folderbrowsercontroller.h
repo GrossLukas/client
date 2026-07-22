@@ -81,7 +81,7 @@ private:
     bool maybeRefreshFolderState(Folder *folder, FolderItem *rootItem);
     void attachPlaceholder(QStandardItem *parentItem);
     void requestListing(Folder *folder, const QString &relPath);
-    void populateListing(Folder *folder, const QString &parentRelPath, const QStringList &subfolders, const QHash<QString, qint64> &sizes);
+    void populateListing(Folder *folder, const QString &parentRelPath, const QStringList &subfolders, const QStringList &files, const QHash<QString, qint64> &sizes);
     void onListingError(Folder *folder, const QString &parentRelPath, bool notFound);
 
     FolderItem *rootItemForFolder(Folder *folder) const;
@@ -100,6 +100,7 @@ private:
 
     static int itemKind(const QStandardItem *item);
     static QList<QStandardItem *> browserChildren(const QStandardItem *parentItem);
+    static QList<QStandardItem *> childrenOfKind(const QStandardItem *parentItem, FolderTreeItemKind kind);
     static QString folderKey(const Folder *folder);
 
     QStandardItemModel *_model = nullptr;

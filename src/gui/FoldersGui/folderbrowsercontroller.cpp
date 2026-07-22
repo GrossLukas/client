@@ -25,6 +25,7 @@
 
 #include "resources/resources.h"
 
+#include <QApplication>
 #include <QCollator>
 #include <QLoggingCategory>
 #include <QMenu>
@@ -33,6 +34,7 @@
 #include <QPointer>
 #include <QScopedValueRollback>
 #include <QStandardItemModel>
+#include <QStyle>
 
 #include <functional>
 
@@ -59,10 +61,15 @@ int FolderBrowserController::itemKind(const QStandardItem *item)
 
 QList<QStandardItem *> FolderBrowserController::browserChildren(const QStandardItem *parentItem)
 {
+    return childrenOfKind(parentItem, FolderTreeItemKind::BrowserFolder);
+}
+
+QList<QStandardItem *> FolderBrowserController::childrenOfKind(const QStandardItem *parentItem, FolderTreeItemKind kind)
+{
     QList<QStandardItem *> result;
     for (int row = 0; row < parentItem->rowCount(); ++row) {
         QStandardItem *child = parentItem->child(row, 0);
-        if (child && itemKind(child) == static_cast<int>(FolderTreeItemKind::BrowserFolder))
+        if (child && itemKind(child) == static_cast<int>(kind))
             result.append(child);
     }
     return result;
@@ -240,7 +247,8 @@ bool FolderBrowserController::maybeRefreshFolderState(Folder *folder, FolderItem
             QScopedValueRollback<bool> guard(_updatingModel, true);
             for (int row = rootItem->rowCount() - 1; row >= 0; --row) {
                 const int kind = itemKind(rootItem->child(row, 0));
-                if (kind == static_cast<int>(FolderTreeItemKind::BrowserFolder) || kind == static_cast<int>(FolderTreeItemKind::BrowserPlaceholder))
+                if (kind == static_cast<int>(FolderTreeItemKind::BrowserFolder) || kind == static_cast<int>(FolderTreeItemKind::BrowserPlaceholder)
+                    || kind == static_cast<int>(FolderTreeItemKind::BrowserFile))
                     rootItem->removeRow(row);
             }
         }
@@ -291,11 +299,18 @@ void FolderBrowserController::requestListing(Folder *folder, const QString &relP
     connect(job, &QObject::destroyed, this, [this, jobKey] { _pendingJobs.remove(jobKey); });
 
     QPointer<Folder> folderGuard(folder);
-    connect(job, &PropfindJob::directoryListingSubfolders, this, [this, job, jobKey, folderGuard, relPath](const QStringList &subfolders) {
+    // non-collection responses are the files; directoryListingSubfolders alone
+    // only carries the collections
+    auto files = std::make_shared<QStringList>();
+    connect(job, &PropfindJob::directoryListingIterated, this, [files](const QString &href, const QMap<QString, QString> &properties) {
+        if (!properties.value(QStringLiteral("resourcetype")).contains(QLatin1String("collection")))
+            files->append(href);
+    });
+    connect(job, &PropfindJob::directoryListingSubfolders, this, [this, job, jobKey, folderGuard, relPath, files](const QStringList &subfolders) {
         _pendingJobs.remove(jobKey);
         if (!folderGuard)
             return;
-        populateListing(folderGuard, relPath, subfolders, job->sizes());
+        populateListing(folderGuard, relPath, subfolders, *files, job->sizes());
     });
     connect(job, &PropfindJob::finishedWithError, this, [this, job, jobKey, folderGuard, relPath] {
         _pendingJobs.remove(jobKey);
@@ -321,11 +336,11 @@ void FolderBrowserController::onListingError(Folder *folder, const QString &pare
 
     QScopedValueRollback<bool> guard(_updatingModel, true);
     // keep the placeholder so collapsing and re-expanding retries the listing
-    placeholder->setText(notFound ? tr("Currently there are no subfolders on the server.")
-                                  : tr("An error occurred while loading the list of subfolders."));
+    placeholder->setText(notFound ? tr("This folder no longer exists on the server.")
+                                  : tr("An error occurred while loading the folder contents."));
 }
 
-void FolderBrowserController::populateListing(Folder *folder, const QString &parentRelPath, const QStringList &subfolders, const QHash<QString, qint64> &sizes)
+void FolderBrowserController::populateListing(Folder *folder, const QString &parentRelPath, const QStringList &subfolders, const QStringList &files, const QHash<QString, qint64> &sizes)
 {
     FolderItem *rootItem = rootItemForFolder(folder);
     if (!rootItem)
@@ -376,6 +391,25 @@ void FolderBrowserController::populateListing(Folder *folder, const QString &par
     }
     Utility::sortFilenames(names);
 
+    // the direct file children, shown as plain informational rows below the folders
+    QHash<QString, Entry> fileEntriesByName;
+    QStringList fileNames;
+    for (const QString &absPath : files) {
+        if (!absPath.startsWith(rootPath))
+            continue;
+        if (_excludedFiles.isExcludedRemote(absPath, rootPath, ignoreHiddenFiles, ItemTypeFile))
+            continue;
+        const QString relPath = absPath.mid(rootPath.size());
+        if (relPath.isEmpty() || !relPath.startsWith(parentPrefix))
+            continue;
+        const QString name = relPath.mid(parentPrefix.size());
+        if (name.isEmpty() || name.contains(QLatin1Char('/')))
+            continue;
+        fileEntriesByName.insert(name, {relPath, sizes.value(absPath, -1)});
+        fileNames.append(name);
+    }
+    Utility::sortFilenames(fileNames);
+
     // a blacklist of just "/" means "everything deselected"; concretize it to the actual
     // top-level folders as soon as they are known, exactly like the selective sync dialog
     if (parentRelPath.isEmpty() && syncState.journalBlackList.contains(QStringLiteral("/"))) {
@@ -423,12 +457,13 @@ void FolderBrowserController::populateListing(Folder *folder, const QString &par
 
             // keep the rows in filename order (same collation as Utility::sortFilenames):
             // insert before the first browser row that should come later (error rows at
-            // the top and the placeholder stay put)
+            // the top stay put; folders sort before files and the placeholder)
             int insertRow = parentItem->rowCount();
             for (int row = 0; row < parentItem->rowCount(); ++row) {
                 QStandardItem *sibling = parentItem->child(row, 0);
                 const int kind = itemKind(sibling);
                 if (kind == static_cast<int>(FolderTreeItemKind::BrowserPlaceholder)
+                    || kind == static_cast<int>(FolderTreeItemKind::BrowserFile)
                     || (kind == static_cast<int>(FolderTreeItemKind::BrowserFolder) && collator.compare(sibling->text(), name) > 0)) {
                     insertRow = row;
                     break;
@@ -450,11 +485,53 @@ void FolderBrowserController::populateListing(Folder *folder, const QString &par
     for (QStandardItem *stale : std::as_const(existing))
         parentItem->removeRow(stale->row());
 
+    // now the file rows: informational only (selective sync stays folder-based),
+    // kept in filename order below the folder rows
+    QHash<QString, QStandardItem *> existingFiles;
+    for (QStandardItem *child : childrenOfKind(parentItem, FolderTreeItemKind::BrowserFile))
+        existingFiles.insert(child->data(FolderItemRoles::RemotePathRole).toString(), child);
+
+    for (const QString &name : std::as_const(fileNames)) {
+        const Entry entry = fileEntriesByName.value(name);
+        QStandardItem *child = existingFiles.take(entry.relPath);
+        if (!child) {
+            child = new QStandardItem(name);
+            child->setIcon(QApplication::style()->standardIcon(QStyle::SP_FileIcon));
+            child->setToolTip(entry.relPath);
+            child->setData(static_cast<int>(FolderTreeItemKind::BrowserFile), FolderItemRoles::ItemKindRole);
+            child->setData(entry.relPath, FolderItemRoles::RemotePathRole);
+            child->setData(0, FolderItemRoles::SortPriorityRole);
+            child->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+
+            QStandardItem *filler = new QStandardItem();
+            // enabled (but nothing else) so keyboard navigation in column 1 can step onto the row
+            filler->setFlags(Qt::ItemIsEnabled);
+
+            // files go after every folder row and before the placeholder, ordered by name
+            int insertRow = parentItem->rowCount();
+            for (int row = 0; row < parentItem->rowCount(); ++row) {
+                QStandardItem *sibling = parentItem->child(row, 0);
+                const int kind = itemKind(sibling);
+                if (kind == static_cast<int>(FolderTreeItemKind::BrowserPlaceholder)
+                    || (kind == static_cast<int>(FolderTreeItemKind::BrowserFile) && collator.compare(sibling->text(), name) > 0)) {
+                    insertRow = row;
+                    break;
+                }
+            }
+            parentItem->insertRow(insertRow, {child, filler});
+        }
+        setBrowserRowDetails(folder, child, entry.relPath, entry.size, vfsMode);
+    }
+
+    // prune rows for files that no longer exist on the server
+    for (QStandardItem *stale : std::as_const(existingFiles))
+        parentItem->removeRow(stale->row());
+
     if (QStandardItem *placeholder = placeholderChild(parentItem)) {
-        if (names.isEmpty() && parentItem == rootItem) {
-            // keep the top-level placeholder as an informational row, otherwise the
-            // folder row would permanently lose its expander
-            placeholder->setText(tr("Currently there are no subfolders on the server."));
+        if (names.isEmpty() && fileNames.isEmpty()) {
+            // keep the placeholder as an informational row: the expander stays (like
+            // in Explorer), collapsing and re-expanding re-checks the server
+            placeholder->setText(tr("This folder is empty on the server."));
         } else {
             parentItem->removeRow(placeholder->row());
         }
@@ -470,8 +547,10 @@ void FolderBrowserController::setBrowserRowDetails(Folder *folder, QStandardItem
         detail = Utility::octetsToString(size);
     item->setData(detail, FolderItemRoles::DetailStringRole);
 
-    //: Accessible text for a remote folder row, %1 is the folder name, %2 its size or availability
-    const QString accessible = detail.isEmpty() ? item->text() : tr("Folder %1, %2").arg(item->text(), detail);
+    const bool isFile = itemKind(item) == static_cast<int>(FolderTreeItemKind::BrowserFile);
+    //: Accessible text for a remote folder/file row, %1 is the name, %2 its size or availability
+    const QString accessible = detail.isEmpty() ? item->text()
+                                                : (isFile ? tr("File %1, %2") : tr("Folder %1, %2")).arg(item->text(), detail);
     item->setData(accessible, Qt::AccessibleTextRole);
 }
 
@@ -716,6 +795,8 @@ void FolderBrowserController::refreshAvailability(Folder *folder, QStandardItem 
     if (recursive) {
         for (QStandardItem *child : browserChildren(item))
             refreshAvailability(folder, child, true);
+        for (QStandardItem *child : childrenOfKind(item, FolderTreeItemKind::BrowserFile))
+            refreshAvailability(folder, child, false);
     }
 }
 
@@ -728,7 +809,12 @@ void FolderBrowserController::popAvailabilityMenu(const QModelIndex &index, cons
         return;
 
     QStandardItem *item = _model->itemFromIndex(index.siblingAtColumn(0));
-    if (!item || itemKind(item) != static_cast<int>(FolderTreeItemKind::BrowserFolder))
+    const auto isPinnable = [](const QStandardItem *i) {
+        const int kind = itemKind(i);
+        return kind == static_cast<int>(FolderTreeItemKind::BrowserFolder)
+            || kind == static_cast<int>(FolderTreeItemKind::BrowserFile);
+    };
+    if (!item || !isPinnable(item))
         return;
 
     // menu.exec() spins a nested event loop: the folder can be removed and the row can be
@@ -756,7 +842,7 @@ void FolderBrowserController::popAvailabilityMenu(const QModelIndex &index, cons
     if (!folder || !folder->virtualFilesEnabled() || !persistentIndex.isValid())
         return;
     item = _model->itemFromIndex(QModelIndex(persistentIndex));
-    if (!item || itemKind(item) != static_cast<int>(FolderTreeItemKind::BrowserFolder))
+    if (!item || !isPinnable(item))
         return;
 
     const QString relPath = item->data(FolderItemRoles::RemotePathRole).toString();

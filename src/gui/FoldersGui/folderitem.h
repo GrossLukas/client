@@ -33,7 +33,7 @@ enum FolderItemRoles { DataRole = Qt::UserRole, StatusIconRole, StatusStringRole
 
 // Discriminates the child rows below a FolderItem. Error rows predate the kind role, so
 // Error doubles as the value an untagged row reports (an unset role decodes to 0).
-enum class FolderTreeItemKind { Error = 0, BrowserFolder = 1, BrowserPlaceholder = 2 };
+enum class FolderTreeItemKind { Error = 0, BrowserFolder = 1, BrowserPlaceholder = 2, BrowserFile = 3 };
 
 class FolderItem : public QStandardItem
 {
