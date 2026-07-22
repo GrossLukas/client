@@ -27,6 +27,7 @@
 class QModelIndex;
 class QNetworkReply;
 class QLabel;
+class QProgressBar;
 class QStandardItemModel;
 
 namespace OCC {
@@ -88,8 +89,15 @@ private:
 
 
     void buildManageAccountMenu();
+    void buildQuotaDisplay();
+    void slotQuotaUpdated(qint64 usedBytes, qint64 totalBytes);
+
 
     Ui::AccountView *ui;
+
+    QWidget *_quotaWidget = nullptr;
+    QProgressBar *_quotaBar = nullptr;
+    QLabel *_quotaLabel = nullptr;
 
     QStandardItemModel *_model;
     QSortFilterProxyModel *_sortModel;

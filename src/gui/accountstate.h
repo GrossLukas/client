@@ -137,6 +137,9 @@ public:
 
     bool isConnected() const;
 
+    /// storage quota poller of this account (owned by the account state)
+    QuotaInfo *quotaInfo() const { return _quotaInfo; }
+
     /** Returns a new settings object for this account, already in the right groups. */
     std::unique_ptr<QSettings> settings();
 

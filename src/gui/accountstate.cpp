@@ -13,6 +13,7 @@
  */
 
 #include "accountstate.h"
+#include "quotainfo.h"
 #include "application.h"
 #include "configfile.h"
 
@@ -63,6 +64,7 @@ AccountState::AccountState(Account *account)
     Q_ASSERT(_account);
 
     connectAccount();
+    _quotaInfo = new QuotaInfo(this);
     connectNetworkInformation();
 
     if (NetworkInformation::instance()->isBehindCaptivePortal()) {
