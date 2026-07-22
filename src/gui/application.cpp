@@ -113,7 +113,7 @@ Application::Application(Platform *platform, const QString &displayLanguage, boo
         slotAccountStateAdded(ai);
     }
 
-    connect(FolderMan::instance()->socketApi(), &SocketApi::shareCommandReceived, _gui.data(), &ownCloudGui::slotShowShareInBrowser);
+    connect(FolderMan::instance()->socketApi(), &SocketApi::shareCommandReceived, _gui.data(), &ownCloudGui::slotShowShareDialog);
 
     // Refactoring example: this is oversimplified and really belongs in a dedicated app builder impl but the idea is illustrated:
     // don't handling everything "locally" -> request that the best entity for the job do it. Then make the proper connections between

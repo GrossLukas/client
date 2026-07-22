@@ -97,6 +97,7 @@ public Q_SLOTS:
      * to the folder).
      */
     void slotShowShareInBrowser(const QString &sharePath, const QString &localPath);
+    void slotShowShareDialog(const QString &sharePath, const QString &localPath);
     void handleAccountSetupError(const QString &error);
 
 private:
