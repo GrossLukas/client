@@ -420,10 +420,17 @@ void ownCloudGui::slotShowShareDialog(const QString &sharePath, const QString &l
     // the OCS share API disabled the dialog cannot work, so open the server's
     // web interface instead (the private-link PROPFIND works either way)
     if (!folder->accountState()->account()->capabilities().filesSharing().api_enabled) {
-        fetchPrivateLinkUrl(folder->accountState()->account(), folder->webDavUrl(), sharePath, this, [](const QUrl &url) {
-            const auto queryUrl = Utility::concatUrlPath(url, QString(), {{QStringLiteral("details"), QStringLiteral("sharing")}});
-            Utility::openBrowser(queryUrl, nullptr);
-        });
+        const auto account = folder->accountState()->account();
+        if (account->capabilities().privateLinkPropertyAvailable()) {
+            fetchPrivateLinkUrl(account, folder->webDavUrl(), sharePath, this, [](const QUrl &url) {
+                const auto queryUrl = Utility::concatUrlPath(url, QString(), {{QStringLiteral("details"), QStringLiteral("sharing")}});
+                Utility::openBrowser(queryUrl, nullptr);
+            });
+        } else {
+            // fetchPrivateLinkUrl would silently do nothing without the
+            // privatelink property - at least open the server's web interface
+            Utility::openBrowser(account->url(), nullptr);
+        }
         return;
     }
     if (_shareDialog) {
