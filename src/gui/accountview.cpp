@@ -251,7 +251,8 @@ void AccountView::slotQuotaUpdated(qint64 usedBytes, qint64 totalBytes)
     _quotaWidget->setVisible(true);
     if (totalBytes > 0) {
         _quotaBar->setVisible(true);
-        const int permille = int(qBound<qint64>(0, (usedBytes * 1000) / totalBytes, 1000));
+        // floating point: usedBytes * 1000 could overflow qint64 for huge (server-controlled) values
+        const int permille = int(qBound(0.0, double(usedBytes) * 1000.0 / double(totalBytes), 1000.0));
         _quotaBar->setValue(permille);
         // brand turquoise, switching to warning red when nearly full; the
         // translucent track works on light and dark palettes alike

@@ -82,11 +82,19 @@ private:
 
     static Application *_instance;
     friend Application *ocApp();
+    friend Application *ocAppOrNull();
 };
 
 inline Application *ocApp()
 {
     OC_ENFORCE(Application::_instance);
+    return Application::_instance;
+}
+
+/** Like ocApp(), but returns nullptr instead of aborting when no Application
+ *  exists (e.g. in the unit tests, which link the gui library without one). */
+inline Application *ocAppOrNull()
+{
     return Application::_instance;
 }
 
