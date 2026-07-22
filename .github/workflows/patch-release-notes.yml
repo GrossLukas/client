@@ -1,0 +1,36 @@
+# One-off maintenance workflow: prepend a warning to the release notes of
+# versions whose Windows setup carried the install-directory regression
+# (7.8.0 - 7.10.0, fixed in 7.10.1). Kept around in case release notes need
+# scripted edits again - the MCP/API surface has no release-edit endpoint.
+name: Patch release notes
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: "Space-separated tags to patch"
+        required: true
+        default: "v7.8.0 v7.9.0 v7.10.0"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepend warning to release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAGS: ${{ inputs.tags }}
+        run: |
+          WARN=$'> [!WARNING]\n> **Dieses Setup nicht mehr verwenden!** Der Windows-Installer dieser Version kann die frisch installierte Version wieder entfernen (Installer-Regression, behoben in v7.10.1). Bitte [v7.10.1 oder neuer](https://github.com/GrossLukas/client/releases/tag/v7.10.1) verwenden - das 7.10.1-Setup repariert betroffene Maschinen automatisch.\n\n'
+          for TAG in $TAGS; do
+            BODY=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)
+            case "$BODY" in
+              "> [!WARNING]"*) echo "$TAG already patched, skipping"; continue;;
+            esac
+            printf '%s%s' "$WARN" "$BODY" > body.md
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file body.md
+            echo "patched $TAG"
+          done
