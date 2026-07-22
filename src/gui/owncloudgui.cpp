@@ -416,15 +416,23 @@ void ownCloudGui::slotShowShareDialog(const QString &sharePath, const QString &l
         qCWarning(lcApplication) << "Could not open the share dialog for" << localPath << "- no responsible folder found";
         return;
     }
-    // native dialog for creating/managing public links; falls back to the
-    // browser share page when the server has the share API disabled
+    // native dialog for creating/managing public links; when the server has
+    // the OCS share API disabled the dialog cannot work, so open the server's
+    // web interface instead (the private-link PROPFIND works either way)
     if (!folder->accountState()->account()->capabilities().filesSharing().api_enabled) {
-        slotShowShareInBrowser(sharePath, localPath);
+        fetchPrivateLinkUrl(folder->accountState()->account(), folder->webDavUrl(), sharePath, this, [](const QUrl &url) {
+            const auto queryUrl = Utility::concatUrlPath(url, QString(), {{QStringLiteral("details"), QStringLiteral("sharing")}});
+            Utility::openBrowser(queryUrl, nullptr);
+        });
         return;
     }
-    auto *dialog = new ShareDialog(folder->accountState(), sharePath, localPath, nullptr);
-    dialog->setAttribute(Qt::WA_DeleteOnClose);
-    raiseDialog(dialog);
+    if (_shareDialog) {
+        _shareDialog->close();
+    }
+    _shareDialog = new ShareDialog(folder->accountState(), sharePath, localPath, nullptr);
+    _shareDialog->show();
+    _shareDialog->raise();
+    _shareDialog->activateWindow();
 }
 
 void ownCloudGui::slotShowShareInBrowser(const QString &sharePath, const QString &localPath)

@@ -28,6 +28,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QLoggingCategory>
 #include <QNetworkRequest>
 #include <QPushButton>
@@ -40,7 +41,11 @@ namespace OCC {
 Q_LOGGING_CATEGORY(lcShareDialog, "gui.sharedialog", QtInfoMsg)
 
 namespace {
-    const QString sharesEndpoint = QStringLiteral("ocs/v2.php/apps/files_sharing/api/v1/shares");
+    // v1 endpoint on purpose: v2.php mirrors OCS errors into the HTTP status,
+    // which makes JsonJob skip parsing - the server's error message (e.g. an
+    // enforced password policy) would never reach the user. v1 always answers
+    // HTTP 200 with the OCS statuscode/message in the body.
+    const QString sharesEndpoint = QStringLiteral("ocs/v1.php/apps/files_sharing/api/v1/shares");
     constexpr int publicLinkShareType = 3;
 
     QNetworkRequest ocsRequest()
@@ -138,14 +143,25 @@ void ShareDialog::loadShares()
 {
     if (!_accountState || !_accountState->account())
         return;
+    if (!_accountState->isConnected()) {
+        const QString notConnected = tr("Not connected to the server. Please check the connection and reopen the dialog.");
+        if (_noSharesLabel)
+            _noSharesLabel->setText(notConnected);
+        else
+            showStatus(notConnected, true);
+        return;
+    }
     auto *job = new JsonApiJob(_accountState->account(), sharesEndpoint,
-        {{QStringLiteral("format"), QStringLiteral("json")},
-            {QStringLiteral("path"), _remotePath},
+        {{QStringLiteral("path"), _remotePath},
             {QStringLiteral("reshares"), QStringLiteral("false")}},
         ocsRequest(), this);
     connect(job, &JsonApiJob::finishedSignal, this, [this, job] {
         if (!job->ocsSuccess()) {
-            _noSharesLabel->setText(tr("Could not load the existing shares."));
+            // after a reload the no-shares label may be gone (links were listed)
+            if (_noSharesLabel)
+                _noSharesLabel->setText(tr("Could not load the existing shares."));
+            else
+                showStatus(tr("Could not load the existing shares."), true);
             qCWarning(lcShareDialog) << "share list failed:" << job->ocsStatus() << job->ocsMessage();
             return;
         }
@@ -195,8 +211,10 @@ void ShareDialog::rebuildShareList(const QList<QVariantMap> &shares)
         if (share.value(QStringLiteral("hasPassword")).toBool())
             details.append(tr("password protected"));
         const QString expiration = share.value(QStringLiteral("expiration")).toString();
-        if (!expiration.isEmpty())
-            details.append(tr("expires %1").arg(expiration.left(10)));
+        if (!expiration.isEmpty()) {
+            const QDate expiryDate = QDate::fromString(expiration.left(10), Qt::ISODate);
+            details.append(tr("expires %1").arg(expiryDate.isValid() ? QLocale().toString(expiryDate, QLocale::ShortFormat) : expiration.left(10)));
+        }
 
         auto *urlLabel = new QLabel(details.isEmpty()
                 ? url.toHtmlEscaped()
@@ -229,7 +247,6 @@ void ShareDialog::createShare()
     }
 
     SimpleNetworkJob::UrlQuery arguments = {
-        {QStringLiteral("format"), QStringLiteral("json")},
         {QStringLiteral("path"), _remotePath},
         {QStringLiteral("shareType"), QString::number(publicLinkShareType)},
         {QStringLiteral("permissions"), QStringLiteral("1")},
@@ -265,7 +282,7 @@ void ShareDialog::deleteShare(const QString &shareId)
     if (!_accountState || !_accountState->account() || shareId.isEmpty())
         return;
     auto *job = new JsonApiJob(_accountState->account(), sharesEndpoint + QLatin1Char('/') + shareId, QByteArrayLiteral("DELETE"),
-        {{QStringLiteral("format"), QStringLiteral("json")}}, ocsRequest(), this);
+        {}, ocsRequest(), this);
     connect(job, &JsonApiJob::finishedSignal, this, [this, job] {
         if (!job->ocsSuccess()) {
             showStatus(tr("Deleting the public link failed."), true);
