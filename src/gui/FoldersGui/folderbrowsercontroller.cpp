@@ -473,9 +473,10 @@ void FolderBrowserController::populateListing(Folder *folder, const QString &par
             // give the new row its own expander; a Depth::One listing cannot tell
             // whether the subfolder has children, so assume it does until expanded
             attachPlaceholder(child);
-        } else if (!placeholderChild(child) && browserChildren(child).isEmpty()) {
+        } else if (child->rowCount() == 0) {
             // the row was previously listed as empty and lost its placeholder; restore the
-            // expander so subfolders created on the server later remain discoverable
+            // expander so content created on the server later remains discoverable
+            // (a row with file children keeps its expander naturally)
             attachPlaceholder(child);
         }
         setBrowserRowDetails(folder, child, entry.relPath, entry.size, vfsMode);
@@ -527,14 +528,20 @@ void FolderBrowserController::populateListing(Folder *folder, const QString &par
     for (QStandardItem *stale : std::as_const(existingFiles))
         parentItem->removeRow(stale->row());
 
-    if (QStandardItem *placeholder = placeholderChild(parentItem)) {
-        if (names.isEmpty() && fileNames.isEmpty()) {
-            // keep the placeholder as an informational row: the expander stays (like
-            // in Explorer), collapsing and re-expanding re-checks the server
-            placeholder->setText(tr("This folder is empty on the server."));
-        } else {
-            parentItem->removeRow(placeholder->row());
+    QStandardItem *placeholder = placeholderChild(parentItem);
+    if (names.isEmpty() && fileNames.isEmpty()) {
+        if (!placeholder) {
+            // an earlier listing had content and removed the placeholder; re-attach
+            // it so the row keeps its expander and can show the empty state
+            attachPlaceholder(parentItem);
+            placeholder = placeholderChild(parentItem);
         }
+        // keep it as an informational row: the expander stays (like in Explorer),
+        // collapsing and re-expanding re-checks the server
+        if (placeholder)
+            placeholder->setText(tr("This folder is empty on the server."));
+    } else if (placeholder) {
+        parentItem->removeRow(placeholder->row());
     }
 }
 
@@ -547,10 +554,15 @@ void FolderBrowserController::setBrowserRowDetails(Folder *folder, QStandardItem
         detail = Utility::octetsToString(size);
     item->setData(detail, FolderItemRoles::DetailStringRole);
 
-    const bool isFile = itemKind(item) == static_cast<int>(FolderTreeItemKind::BrowserFile);
-    //: Accessible text for a remote folder/file row, %1 is the name, %2 its size or availability
-    const QString accessible = detail.isEmpty() ? item->text()
-                                                : (isFile ? tr("File %1, %2") : tr("Folder %1, %2")).arg(item->text(), detail);
+    QString accessibleFormat;
+    if (itemKind(item) == static_cast<int>(FolderTreeItemKind::BrowserFile)) {
+        //: Accessible (screen reader) text for a remote file row, %1 is the file name, %2 its size or availability
+        accessibleFormat = tr("File %1, %2");
+    } else {
+        //: Accessible (screen reader) text for a remote folder row, %1 is the folder name, %2 its size or availability
+        accessibleFormat = tr("Folder %1, %2");
+    }
+    const QString accessible = detail.isEmpty() ? item->text() : accessibleFormat.arg(item->text(), detail);
     item->setData(accessible, Qt::AccessibleTextRole);
 }
 

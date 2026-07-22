@@ -309,7 +309,8 @@ void AccountFoldersView::popItemMenu(const QPoint &pos)
     const QModelIndex indexUnderCursor = _treeView->indexAt(pos);
     if (indexUnderCursor.isValid() && indexUnderCursor.parent().isValid()) {
         const QModelIndex contentIndex = indexUnderCursor.siblingAtColumn(0);
-        if (contentIndex.data(FolderItemRoles::ItemKindRole).toInt() == static_cast<int>(FolderTreeItemKind::BrowserFolder))
+        const int kind = contentIndex.data(FolderItemRoles::ItemKindRole).toInt();
+        if (kind == static_cast<int>(FolderTreeItemKind::BrowserFolder) || kind == static_cast<int>(FolderTreeItemKind::BrowserFile))
             emit browserMenuRequested(contentIndex, _treeView->viewport()->mapToGlobal(pos));
         return;
     }

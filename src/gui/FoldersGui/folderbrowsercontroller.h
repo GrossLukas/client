@@ -31,6 +31,7 @@ class QWidget;
 namespace OCC {
 
 class Folder;
+enum class FolderTreeItemKind;
 class FolderItem;
 
 /**
