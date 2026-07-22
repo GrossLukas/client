@@ -24,9 +24,11 @@
 #include "accountmanager.h"
 #include "accountstate.h"
 #include "application.h"
+#include "common/utility.h"
 #include "commonstrings.h"
 #include "configfile.h"
 #include "folderman.h"
+#include "quotainfo.h"
 #include "folderwizard/folderwizard.h"
 #include "gui/accountmodalwidget.h"
 #include "gui/models/models.h"
@@ -38,6 +40,7 @@
 #include "settingsdialog.h"
 #include "theme.h"
 
+#include <QProgressBar>
 #include <QAction>
 #include <QMessageBox>
 #include <QSortFilterProxyModel>
@@ -80,6 +83,7 @@ AccountView::AccountView(AccountState *accountState, QWidget *parent)
     slotAccountStateChanged(_accountState->state());
 
     buildManageAccountMenu();
+    buildQuotaDisplay();
 
     connect(_accountState, &AccountState::isSettingUpChanged, this, &AccountView::accountSettingUpChanged);
 
@@ -212,6 +216,58 @@ void AccountView::showConnectionLabel(const QString &message, StatusIcon statusI
     ui->warningLabel->setVisible(statusIcon != StatusIcon::None);
 }
 
+
+
+void AccountView::buildQuotaDisplay()
+{
+    // a slim storage bar directly below the connection status line, fed by the
+    // account's QuotaInfo poller; hidden until the first server response
+    _quotaWidget = new QWidget(this);
+    auto *quotaLayout = new QHBoxLayout(_quotaWidget);
+    quotaLayout->setContentsMargins(0, 0, 0, 4);
+    _quotaBar = new QProgressBar(_quotaWidget);
+    _quotaBar->setObjectName(QStringLiteral("accountQuotaBar"));
+    _quotaBar->setRange(0, 1000);
+    _quotaBar->setTextVisible(false);
+    _quotaBar->setFixedHeight(8);
+    _quotaBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    _quotaLabel = new QLabel(_quotaWidget);
+    _quotaLabel->setObjectName(QStringLiteral("accountQuotaLabel"));
+    quotaLayout->addWidget(_quotaBar, 1);
+    quotaLayout->addWidget(_quotaLabel, 0);
+    if (auto *mainLayout = qobject_cast<QVBoxLayout *>(layout()))
+        mainLayout->insertWidget(1, _quotaWidget);
+    _quotaWidget->setVisible(false);
+
+    if (QuotaInfo *quota = _accountState->quotaInfo()) {
+        connect(quota, &QuotaInfo::quotaUpdated, this, &AccountView::slotQuotaUpdated);
+        if (quota->lastQuotaUsedBytes() > 0 || quota->lastQuotaTotalBytes() > 0)
+            slotQuotaUpdated(quota->lastQuotaUsedBytes(), quota->lastQuotaTotalBytes());
+    }
+}
+
+void AccountView::slotQuotaUpdated(qint64 usedBytes, qint64 totalBytes)
+{
+    _quotaWidget->setVisible(true);
+    if (totalBytes > 0) {
+        _quotaBar->setVisible(true);
+        const int permille = int(qBound<qint64>(0, (usedBytes * 1000) / totalBytes, 1000));
+        _quotaBar->setValue(permille);
+        // brand turquoise, switching to warning red when nearly full; the
+        // translucent track works on light and dark palettes alike
+        const bool critical = permille >= 900;
+        _quotaBar->setStyleSheet(QStringLiteral(
+            "QProgressBar { background: rgba(127,127,127,60); border: none; border-radius: 4px; }"
+            "QProgressBar::chunk { background: %1; border-radius: 4px; }")
+            .arg(critical ? QStringLiteral("#e0245e") : QStringLiteral("#00e2bb")));
+        //: storage quota, %1 and %2 are sizes like "11.2 GB"
+        _quotaLabel->setText(tr("%1 of %2 used").arg(Utility::octetsToString(usedBytes), Utility::octetsToString(totalBytes)));
+    } else {
+        _quotaBar->setVisible(false);
+        //: storage quota without a server-side limit, %1 is a size like "11.2 GB"
+        _quotaLabel->setText(tr("%1 used").arg(Utility::octetsToString(usedBytes)));
+    }
+}
 
 void AccountView::buildManageAccountMenu()
 {

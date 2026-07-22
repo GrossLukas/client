@@ -36,6 +36,7 @@ set(client_SRCS
     lockwatcher.cpp
     logbrowser.cpp
     navigationpanehelper.cpp
+    quotainfo.cpp
     networkinformation.cpp
     networksettings.cpp
     openfilemanager.cpp
