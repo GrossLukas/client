@@ -80,21 +80,10 @@ Section "Install"
   DetailPrint "Beende laufenden owncloud.online Client / stopping running client ..."
   nsExec::ExecToLog 'taskkill /F /IM "${CLIENT_PROCESS}"'
   Pop $0
+  ; older generations shipped the binary as owncloud.exe - stop that one too
+  nsExec::ExecToLog 'taskkill /F /IM "owncloud.exe"'
+  Pop $0
   Sleep 1500
-
-  ; ---- Migrate away from the old default directory --------------------------
-  ; Earlier versions installed to "$PROGRAMFILES64\ownCloud". When such an
-  ; installation exists and a different target is used now, uninstall it first
-  ; (silently, _?= keeps the uninstaller in place so ExecWait really waits),
-  ; otherwise it would linger as an orphan without an uninstall entry.
-  ${If} "$INSTDIR" != "${OLD_INSTDIR}"
-  ${AndIf} ${FileExists} "${OLD_INSTDIR}\uninstall.exe"
-    DetailPrint "Entferne alte Installation in ${OLD_INSTDIR} / removing old installation ..."
-    ExecWait '"${OLD_INSTDIR}\uninstall.exe" /S _?=${OLD_INSTDIR}' $0
-    DetailPrint "Alter Uninstaller / old uninstaller exit code: $0"
-    Delete "${OLD_INSTDIR}\uninstall.exe"
-    RMDir /r "${OLD_INSTDIR}"
-  ${EndIf}
 
   ; Unpack and run the real installer silently.
   InitPluginsDir
@@ -109,6 +98,43 @@ Section "Install"
     DetailPrint "Installation fehlgeschlagen / installation failed (exit code $0)."
     Abort "Installation fehlgeschlagen / installation failed (exit code $0)."
   installOk:
+
+  ; ---- Migrate away from the old default directory --------------------------
+  ; Earlier versions installed to "$PROGRAMFILES64\ownCloud". Remove such an
+  ; installation only NOW, after the new install succeeded - aborting above must
+  ; never leave the machine without any client. The old uninstaller deletes the
+  ; shared Uninstall\ownCloud registry key, so the entry for the NEW install is
+  ; rewritten right afterwards.
+  ${If} "$INSTDIR" != "${OLD_INSTDIR}"
+  ${AndIf} ${FileExists} "${OLD_INSTDIR}\uninstall.exe"
+    DetailPrint "Entferne alte Installation in ${OLD_INSTDIR} / removing old installation ..."
+    ; unregister the old shell extensions first - Explorer holds those DLLs
+    StrCpy $6 "$WINDIR\SysNative\regsvr32.exe"
+    ${IfNot} ${FileExists} "$6"
+      StrCpy $6 "$SYSDIR\regsvr32.exe"
+    ${EndIf}
+    ${If} ${FileExists} "${OLD_INSTDIR}\bin\OCOverlays.dll"
+      nsExec::ExecToLog '"$6" /u /s "${OLD_INSTDIR}\bin\OCOverlays.dll"'
+      Pop $0
+    ${EndIf}
+    ${If} ${FileExists} "${OLD_INSTDIR}\bin\OCContextMenu.dll"
+      nsExec::ExecToLog '"$6" /u /s "${OLD_INSTDIR}\bin\OCContextMenu.dll"'
+      Pop $0
+    ${EndIf}
+    ; silent uninstall; _?= keeps the uninstaller in place so ExecWait really waits
+    ExecWait '"${OLD_INSTDIR}\uninstall.exe" /S _?=${OLD_INSTDIR}' $0
+    DetailPrint "Alter Uninstaller / old uninstaller exit code: $0"
+    ; files still locked (e.g. shell DLLs loaded by Explorer) are removed at the
+    ; reboot this installer mandates anyway
+    Delete /REBOOTOK "${OLD_INSTDIR}\uninstall.exe"
+    RMDir /r /REBOOTOK "${OLD_INSTDIR}"
+    ; restore the uninstall entry of the NEW installation (the embedded
+    ; installer generation writes in the default 32-bit view without SetRegView)
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayName" "owncloud.online Client ${VERSION}"
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "UninstallString" '"$INSTDIR\uninstall.exe"'
+    WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayVersion" "${VERSION}"
+    WriteRegStr HKLM "Software\ownCloud GmbH\ownCloud" "Install_Dir" "$INSTDIR"
+  ${EndIf}
 
   ; ---- Rebrand the Apps & Features entry ------------------------------------
   ; The embedded installer writes its uninstall entry with upstream branding

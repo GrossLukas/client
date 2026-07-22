@@ -229,7 +229,8 @@ int FolderItemDelegate::calculateErrorIndent(const QStyleOptionViewItem &option)
 bool FolderItemDelegate::isBrowserRow(const QModelIndex &index)
 {
     const int kind = index.data(FolderItemRoles::ItemKindRole).toInt();
-    return kind == static_cast<int>(FolderTreeItemKind::BrowserFolder) || kind == static_cast<int>(FolderTreeItemKind::BrowserPlaceholder);
+    return kind == static_cast<int>(FolderTreeItemKind::BrowserFolder) || kind == static_cast<int>(FolderTreeItemKind::BrowserPlaceholder)
+        || kind == static_cast<int>(FolderTreeItemKind::BrowserFile);
 }
 
 QRect FolderItemDelegate::browserCheckRect(const QStyleOptionViewItem &option) const
