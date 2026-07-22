@@ -132,8 +132,12 @@ Section "Install"
   ; location. The old uninstaller deletes the shared Uninstall\ownCloud and
   ; "ownCloud GmbH" registry keys, so the entries for the NEW install are
   ; rewritten right afterwards.
+  ; prefix check instead of plain equality: a target nested INSIDE the old
+  ; directory must not trigger the removal of its own parent either
+  StrLen $7 "${OLD_INSTDIR}"
+  StrCpy $3 "$INSTDIR" $7
   ${If} $9 != ""
-  ${AndIf} "$INSTDIR" != "${OLD_INSTDIR}"
+  ${AndIf} "$3" != "${OLD_INSTDIR}"
   ${AndIf} ${FileExists} "${OLD_INSTDIR}\*.*"
     DetailPrint "Entferne alte Installation in ${OLD_INSTDIR} / removing old installation ..."
     ; unregister the old shell extensions first - Explorer holds those DLLs
