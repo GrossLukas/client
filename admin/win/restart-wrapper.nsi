@@ -85,12 +85,22 @@ Section "Install"
   Pop $0
   Sleep 1500
 
+  ; ---- Steer the embedded installer to $INSTDIR -----------------------------
+  ; The embedded craft installer IGNORES /D= completely: its MultiUser setup
+  ; unconditionally resets $INSTDIR in .onInit and then applies the Install_Dir
+  ; value from HKLM "Software\ownCloud GmbH\ownCloud" (32-bit view) when
+  ; present. Writing that value beforehand is the only reliable way to choose
+  ; its target directory - it is the same mechanism its own upgrades use.
+  ; (This wrapper is a 32-bit process, so a plain HKLM write lands in the same
+  ; WOW6432Node view the embedded installer reads.)
+  WriteRegStr HKLM "Software\ownCloud GmbH\ownCloud" "Install_Dir" "$INSTDIR"
+
   ; Unpack and run the real installer silently.
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
   File "/oname=client-setup.exe" "${SOURCE_EXE}"
   DetailPrint "Installiere owncloud.online Client ${VERSION} nach $INSTDIR / installing ..."
-  ; forward the chosen install dir; /D= must be last and unquoted (NSIS rule)
+  ; /D= is kept as belt and braces although the registry value above decides
   ExecWait '"$PLUGINSDIR\client-setup.exe" /S /D=$INSTDIR' $0
   DetailPrint "Installer exit code: $0"
   IntCmp $0 0 installOk
@@ -99,14 +109,23 @@ Section "Install"
     Abort "Installation fehlgeschlagen / installation failed (exit code $0)."
   installOk:
 
+  ; ---- Verify where the client actually landed ------------------------------
+  ; $9 = client binary strictly under $INSTDIR, or "" - the migration below
+  ; must only ever run when the new client verifiably lives OUTSIDE the old
+  ; directory, so it can never delete the installation we just made.
+  StrCpy $2 "$INSTDIR"
+  Call FindClientExe
+  StrCpy $9 "$ClientExe"
+
   ; ---- Migrate away from the old default directory --------------------------
   ; Earlier versions installed to "$PROGRAMFILES64\ownCloud". Remove such an
-  ; installation only NOW, after the new install succeeded - aborting above must
-  ; never leave the machine without any client. The old uninstaller deletes the
-  ; shared Uninstall\ownCloud registry key, so the entry for the NEW install is
+  ; installation only now, after the new install has been VERIFIED in its new
+  ; location. The old uninstaller deletes the shared Uninstall\ownCloud and
+  ; "ownCloud GmbH" registry keys, so the entries for the NEW install are
   ; rewritten right afterwards.
-  ${If} "$INSTDIR" != "${OLD_INSTDIR}"
-  ${AndIf} ${FileExists} "${OLD_INSTDIR}\uninstall.exe"
+  ${If} $9 != ""
+  ${AndIf} "$INSTDIR" != "${OLD_INSTDIR}"
+  ${AndIf} ${FileExists} "${OLD_INSTDIR}\*.*"
     DetailPrint "Entferne alte Installation in ${OLD_INSTDIR} / removing old installation ..."
     ; unregister the old shell extensions first - Explorer holds those DLLs
     StrCpy $6 "$WINDIR\SysNative\regsvr32.exe"
@@ -122,13 +141,15 @@ Section "Install"
       Pop $0
     ${EndIf}
     ; silent uninstall; _?= keeps the uninstaller in place so ExecWait really waits
-    ExecWait '"${OLD_INSTDIR}\uninstall.exe" /S _?=${OLD_INSTDIR}' $0
-    DetailPrint "Alter Uninstaller / old uninstaller exit code: $0"
+    ${If} ${FileExists} "${OLD_INSTDIR}\uninstall.exe"
+      ExecWait '"${OLD_INSTDIR}\uninstall.exe" /S _?=${OLD_INSTDIR}' $0
+      DetailPrint "Alter Uninstaller / old uninstaller exit code: $0"
+    ${EndIf}
     ; files still locked (e.g. shell DLLs loaded by Explorer) are removed at the
     ; reboot this installer mandates anyway
     Delete /REBOOTOK "${OLD_INSTDIR}\uninstall.exe"
     RMDir /r /REBOOTOK "${OLD_INSTDIR}"
-    ; restore the uninstall entry of the NEW installation (the embedded
+    ; restore the registry entries of the NEW installation (the embedded
     ; installer generation writes in the default 32-bit view without SetRegView)
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "DisplayName" "owncloud.online Client ${VERSION}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "UninstallString" '"$INSTDIR\uninstall.exe"'
@@ -163,8 +184,8 @@ Section "Install"
   ; bin\owncloud.online.exe (current), owncloud.online.exe or owncloud.exe:
   ; find it and create correctly branded, working shortcuts.
 
-  StrCpy $2 "$INSTDIR" ; the dir we just forwarded to the embedded installer
-  Call FindClientExe
+  StrCpy $2 "$INSTDIR" ; the dir the embedded installer was steered to
+  StrCpy $ClientExe "$9" ; verified above
   ${If} $ClientExe == ""
     ; fallback: resolve the install dir from the uninstall entry
     ReadRegStr $1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\ownCloud" "UninstallString"
@@ -256,7 +277,10 @@ Section "Install"
       DetailPrint "OCContextMenu.dll nicht gefunden / not found in $4 - context menu skipped."
     ${EndIf}
   ${Else}
-    DetailPrint "Client-Programmdatei nicht gefunden / client binary not found - shortcuts unchanged."
+    ; must not happen: the embedded installer reported success but no client
+    ; binary can be found - say so loudly instead of finishing silently
+    DetailPrint "FEHLER: Client-Programmdatei nicht gefunden / ERROR: client binary not found."
+    MessageBox MB_OK|MB_ICONEXCLAMATION "Die Installation scheint unvollstaendig zu sein: die Client-Programmdatei wurde nicht gefunden. Bitte den Setup erneut ausfuehren und andernfalls den Support kontaktieren.$\r$\n$\r$\nThe installation appears to be incomplete: the client binary was not found. Please re-run the setup." /SD IDOK
   ${EndIf}
   ; --------------------------------------------------------------------------
 
