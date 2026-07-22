@@ -47,6 +47,7 @@ set(client_SRCS
     activitysettings.cpp
     selectivesyncwidget.cpp
     settingsdialog.cpp
+    sharedialog.cpp
     tlserrordialog.cpp
     syncrunfilelog.cpp
     accountstate.cpp

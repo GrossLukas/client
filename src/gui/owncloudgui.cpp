@@ -28,6 +28,7 @@
 #include "logbrowser.h"
 #include "progressdispatcher.h"
 #include "settingsdialog.h"
+#include "sharedialog.h"
 
 #include "newaccountwizard/newaccountbuilder.h"
 #include "newaccountwizard/newaccountmodel.h"
@@ -406,6 +407,25 @@ void ownCloudGui::raise()
 #endif
 }
 
+
+void ownCloudGui::slotShowShareDialog(const QString &sharePath, const QString &localPath)
+{
+    QString file;
+    const auto folder = FolderMan::instance()->folderForPath(localPath, &file);
+    if (!folder || !folder->accountState()) {
+        qCWarning(lcApplication) << "Could not open the share dialog for" << localPath << "- no responsible folder found";
+        return;
+    }
+    // native dialog for creating/managing public links; falls back to the
+    // browser share page when the server has the share API disabled
+    if (!folder->accountState()->account()->capabilities().filesSharing().api_enabled) {
+        slotShowShareInBrowser(sharePath, localPath);
+        return;
+    }
+    auto *dialog = new ShareDialog(folder->accountState(), sharePath, localPath, nullptr);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    raiseDialog(dialog);
+}
 
 void ownCloudGui::slotShowShareInBrowser(const QString &sharePath, const QString &localPath)
 {
