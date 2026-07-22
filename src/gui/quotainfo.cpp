@@ -23,6 +23,8 @@
 
 #include <QLoggingCategory>
 
+#include <limits>
+
 using namespace std::chrono_literals;
 
 namespace OCC {
@@ -72,7 +74,12 @@ void QuotaInfo::refresh()
         // negative "available" values are DAV specials (-1 unknown, -2 unlimited,
         // -3 infinite): treat them all as "no limit"
         _lastQuotaUsedBytes = qMax<qint64>(0, used);
-        _lastQuotaTotalBytes = (okAvailable && available >= 0) ? _lastQuotaUsedBytes + available : 0;
+        // saturate: both values come from the server and must not overflow the sum
+        _lastQuotaTotalBytes = (okAvailable && available >= 0)
+            ? (available > std::numeric_limits<qint64>::max() - _lastQuotaUsedBytes
+                      ? std::numeric_limits<qint64>::max()
+                      : _lastQuotaUsedBytes + available)
+            : 0;
         qCDebug(lcQuotaInfo) << "Quota for" << _accountState->account()->displayNameWithHost()
                              << "used:" << _lastQuotaUsedBytes << "total:" << _lastQuotaTotalBytes;
         maybeWarnNearlyFull();
@@ -95,7 +102,8 @@ void QuotaInfo::maybeWarnNearlyFull()
 
     _warnedNearlyFull = true;
     qCWarning(lcQuotaInfo) << "Account storage nearly full:" << _lastQuotaUsedBytes << "of" << _lastQuotaTotalBytes;
-    if (ownCloudGui *gui = ocApp() ? ocApp()->gui() : nullptr) {
+    Application *app = ocAppOrNull(); // tests run account states without an Application
+    if (ownCloudGui *gui = app ? app->gui() : nullptr) {
         gui->slotShowTrayMessage(tr("Storage space almost full"),
             tr("The cloud storage of %1 is almost full: %2 of %3 are used.")
                 .arg(_accountState->account()->displayNameWithHost(),
